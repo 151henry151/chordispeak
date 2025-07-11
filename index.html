@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChordiSpeak - AI Chord Vocal Generator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+                'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+                sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .App {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .App-header {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 2rem 0;
+            text-align: center;
+            color: white;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .App-header h1 {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .App-header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* Main content */
+        .App-main {
+            flex: 1;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            width: 100%;
+        }
+
+        /* Upload section */
+        .upload-section {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+        }
+
+        .upload-section h2 {
+            color: #333;
+            margin-bottom: 1.5rem;
+            text-align: center;
+            font-size: 1.8rem;
+        }
+
+        .file-upload-container {
+            margin-bottom: 1.5rem;
+        }
+
+        .file-input {
+            width: 100%;
+            padding: 1rem;
+            border: 2px dashed #667eea;
+            border-radius: 10px;
+            background: rgba(102, 126, 234, 0.05);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 1rem;
+        }
+
+        .file-input:hover {
+            border-color: #764ba2;
+            background: rgba(102, 126, 234, 0.1);
+        }
+
+        .file-input:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .file-info {
+            text-align: center;
+        }
+
+        .selected-file {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 8px;
+            border: 1px solid rgba(102, 126, 234, 0.3);
+        }
+
+        .file-name {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .file-size {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        /* Error message */
+        .error-message {
+            background: #fed7d7;
+            border: 1px solid #feb2b2;
+            color: #c53030;
+            padding: 1rem;
+            border-radius: 10px;
+            margin: 1rem 0;
+            text-align: center;
+        }
+
+        /* Progress container */
+        .progress-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            text-align: center;
+        }
+
+        .progress-bar {
+            background: #e2e8f0;
+            border-radius: 10px;
+            height: 20px;
+            overflow: hidden;
+            margin: 1rem 0;
+        }
+
+        .progress-fill {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s ease;
+            border-radius: 10px;
+        }
+
+        .progress-details {
+            margin: 1rem 0;
+        }
+
+        .progress-text {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 0.5rem;
+        }
+
+        .progress-percentage {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 0.5rem;
+        }
+
+        .progress-status {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin: 0.5rem;
+        }
+
+        .status-starting { background: #bee3f8; color: #2b6cb0; }
+        .status-processing { background: #fef5e7; color: #d69e2e; }
+        .status-completed { background: #c6f6d5; color: #38a169; }
+        .status-error { background: #fed7d7; color: #c53030; }
+
+        /* Action buttons */
+        .action-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin: 1.5rem 0;
+        }
+
+        .process-button, .reset-button, .download-button {
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .process-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .process-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .process-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .reset-button {
+            background: #e2e8f0;
+            color: #4a5568;
+        }
+
+        .reset-button:hover {
+            background: #cbd5e0;
+            transform: translateY(-2px);
+        }
+
+        .download-button {
+            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+            color: white;
+        }
+
+        .download-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(72, 187, 120, 0.3);
+        }
+
+        /* Results section */
+        .results-section {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            text-align: center;
+        }
+
+        .results-section h2 {
+            color: #333;
+            margin-bottom: 1.5rem;
+            font-size: 1.8rem;
+        }
+
+        .audio-player-container {
+            margin: 1.5rem 0;
+        }
+
+        .audio-player {
+            width: 100%;
+            max-width: 400px;
+            height: 50px;
+            border-radius: 10px;
+            background: #f7fafc;
+            border: 2px solid #e2e8f0;
+        }
+
+        .download-section {
+            margin: 1.5rem 0;
+        }
+
+        .download-info {
+            background: rgba(102, 126, 234, 0.1);
+            padding: 1rem;
+            border-radius: 10px;
+            margin: 1rem 0;
+        }
+
+        .success-message {
+            background: #c6f6d5;
+            border: 1px solid #9ae6b4;
+            color: #22543d;
+            padding: 1rem;
+            border-radius: 10px;
+            margin: 1rem 0;
+        }
+
+        .success-message span {
+            font-weight: 600;
+        }
+
+        .success-message p {
+            margin: 0.5rem 0 0 0;
+            font-size: 0.9rem;
+        }
+
+        /* Footer */
+        .App-footer {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 1rem 0;
+            text-align: center;
+            color: white;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .App-footer p {
+            opacity: 0.8;
+            font-size: 0.9rem;
+        }
+
+        .App-footer a {
+            color: white;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .App-footer a:hover {
+            opacity: 1;
+            text-decoration: underline;
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .App-header h1 {
+                font-size: 2rem;
+            }
+
+            .App-header p {
+                font-size: 1rem;
+            }
+
+            .App-main {
+                padding: 1rem;
+            }
+
+            .upload-section,
+            .progress-container,
+            .results-section,
+            .features-section {
+                padding: 1.5rem;
+            }
+
+            .mode-buttons {
+                flex-direction: column;
+            }
+
+            .action-buttons {
+                flex-direction: column;
+            }
+
+            .process-button,
+            .reset-button,
+            .download-button {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .feature-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .App-header {
+                padding: 1rem 0;
+            }
+
+            .App-header h1 {
+                font-size: 1.8rem;
+            }
+
+            .upload-section h2,
+            .results-section h2,
+            .features-section h2 {
+                font-size: 1.5rem;
+            }
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .processing {
+            animation: pulse 2s infinite;
+        }
+
+        .file-input::-webkit-file-upload-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .file-input::-webkit-file-upload-button:hover {
+            opacity: 0.9;
+        }
+
+        /* Chord Selection Styles */
+        .chord-selection-container {
+            margin: 2rem 0;
+            padding: 1.5rem;
+            background: rgba(102, 126, 234, 0.05);
+            border-radius: 15px;
+            border: 1px solid rgba(102, 126, 234, 0.2);
+        }
+
+        .chord-selection-container h3 {
+            color: #333;
+            margin-bottom: 0.5rem;
+            font-size: 1.3rem;
+            text-align: center;
+        }
+
+        .chord-selection-description {
+            text-align: center;
+            color: #666;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .chord-selection-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .selection-button {
+            padding: 0.5rem 1rem;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            background: white;
+            color: #667eea;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9rem;
+        }
+
+        .selection-button:hover {
+            background: #667eea;
+            color: white;
+            transform: translateY(-1px);
+        }
+
+        .chord-checkboxes {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            justify-content: center;
+        }
+
+        .chord-checkbox-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            min-width: 200px;
+        }
+
+        .chord-checkbox {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.7);
+            border: 1px solid rgba(102, 126, 234, 0.2);
+        }
+
+        .chord-checkbox:hover {
+            background: rgba(102, 126, 234, 0.1);
+            transform: translateY(-1px);
+        }
+
+        .chord-checkbox input[type="checkbox"] {
+            display: none;
+        }
+
+        .checkmark {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #667eea;
+            border-radius: 4px;
+            margin-right: 0.75rem;
+            position: relative;
+            transition: all 0.3s ease;
+            background: white;
+        }
+
+        .chord-checkbox input[type="checkbox"]:checked + .checkmark {
+            background: #667eea;
+            border-color: #667eea;
+        }
+
+        .chord-checkbox input[type="checkbox"]:checked + .checkmark::after {
+            content: '✓';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .chord-label {
+            font-weight: 500;
+            color: #333;
+            font-size: 0.95rem;
+        }
+
+        /* Responsive design for chord selection */
+        @media (max-width: 768px) {
+            .chord-checkboxes {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            .chord-checkbox-group {
+                width: 100%;
+                max-width: 300px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="App">
+        <header class="App-header">
+            <h1>🎵 ChordiSpeak</h1>
+            <p>Upload a song and learn chord progressions by ear</p>
+        </header>
+
+        <main class="App-main">
+            <!-- File Upload Section -->
+            <div class="upload-section">
+                <h2>Upload Your Song</h2>
+                <div class="file-upload-container">
+                    <input type="file" id="fileInput" class="file-input" accept=".mp3,.wav,.flac,.m4a">
+                    <div class="file-info" id="fileInfo" style="display: none;">
+                        <div class="selected-file">
+                            <span>📁</span>
+                            <span class="file-name" id="fileName"></span>
+                            <span class="file-size" id="fileSize"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chord Type Selection -->
+                <div class="chord-selection-container">
+                    <h3>🎼 Chord Types to Detect</h3>
+                    <p class="chord-selection-description">Select which chord types you want to detect. Major chords are always included.</p>
+                    
+                    <div class="chord-selection-buttons">
+                        <button type="button" class="selection-button" id="selectAllBtn">Select All</button>
+                        <button type="button" class="selection-button" id="clearAllBtn">Clear All</button>
+                    </div>
+                    
+                    <div class="chord-checkboxes">
+                        <div class="chord-checkbox-group">
+                            <label class="chord-checkbox">
+                                <input type="checkbox" id="minorChords" checked>
+                                <span class="checkmark"></span>
+                                <span class="chord-label">Minor Chords</span>
+                            </label>
+                            
+                            <label class="chord-checkbox">
+                                <input type="checkbox" id="seventhChords" checked>
+                                <span class="checkmark"></span>
+                                <span class="chord-label">Seventh Chords</span>
+                            </label>
+                            
+                            <label class="chord-checkbox">
+                                <input type="checkbox" id="minorSeventhChords" checked>
+                                <span class="checkmark"></span>
+                                <span class="chord-label">Minor Seventh Chords</span>
+                            </label>
+                            
+                            <label class="chord-checkbox">
+                                <input type="checkbox" id="majorSeventhChords" checked>
+                                <span class="checkmark"></span>
+                                <span class="chord-label">Major Seventh Chords</span>
+                            </label>
+                        </div>
+                        
+                        <div class="chord-checkbox-group">
+                            <label class="chord-checkbox">
+                                <input type="checkbox" id="diminishedChords">
+                                <span class="checkmark"></span>
+                                <span class="chord-label">Diminished Chords</span>
+                            </label>
+                            
+                            <label class="chord-checkbox">
+                                <input type="checkbox" id="augmentedChords">
+                                <span class="checkmark"></span>
+                                <span class="chord-label">Augmented Chords</span>
+                            </label>
+                            
+                            <label class="chord-checkbox">
+                                <input type="checkbox" id="suspendedChords">
+                                <span class="checkmark"></span>
+                                <span class="chord-label">Suspended Chords</span>
+                            </label>
+                            
+                            <label class="chord-checkbox">
+                                <input type="checkbox" id="powerChords">
+                                <span class="checkmark"></span>
+                                <span class="chord-label">Power Chords</span>
+                            </label>
+                        </div>
+                        
+                        <div class="chord-checkbox-group">
+                            <label class="chord-checkbox">
+                                <input type="checkbox" id="addNineChords">
+                                <span class="checkmark"></span>
+                                <span class="chord-label">Add9 Chords</span>
+                            </label>
+                            
+                            <label class="chord-checkbox">
+                                <input type="checkbox" id="sixthChords">
+                                <span class="checkmark"></span>
+                                <span class="chord-label">Sixth Chords</span>
+                            </label>
+                            
+                            <label class="chord-checkbox">
+                                <input type="checkbox" id="minorSixthChords">
+                                <span class="checkmark"></span>
+                                <span class="chord-label">Minor Sixth Chords</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="action-buttons">
+                    <button class="process-button" id="processBtn" disabled>
+                        🚀 Generate Chord Cover
+                    </button>
+                    <button class="reset-button" id="resetBtn">
+                        🔄 Reset
+                    </button>
+                </div>
+            </div>
+
+            <!-- Error Message -->
+            <div class="error-message" id="errorContainer" style="display: none;"></div>
+
+            <!-- Progress Section -->
+            <div class="progress-container" id="progressContainer" style="display: none;">
+                <h2>Processing</h2>
+                <div class="progress-details">
+                    <div class="progress-text" id="progressText">Initializing...</div>
+                    <div class="progress-percentage" id="progressPercentage">0%</div>
+                    <div class="progress-status" id="progressStatus">Starting...</div>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="status-badge" id="statusBadge">Starting</div>
+            </div>
+
+            <!-- Results Section -->
+            <div class="results-section" id="resultsContainer" style="display: none;">
+                <h2>Processing Complete!</h2>
+                <div class="success-message">
+                    <span>✅ Success!</span>
+                    <p>Your chord vocal track has been generated successfully.</p>
+                </div>
+                <div class="audio-player-container">
+                    <audio controls class="audio-player" id="audioPlayer"></audio>
+                </div>
+                <div class="download-section">
+                    <div class="download-info">
+                        <p><strong>Download your processed audio file</strong></p>
+                        <p>Format: WAV | Quality: High</p>
+                    </div>
+                    <button class="download-button" id="downloadBtn">
+                        📥 Download Result
+                    </button>
+                </div>
+            </div>
+
+
+        </main>
+
+        <footer class="App-footer">
+            <p>by <a href="https://hromp.com" target="_blank" rel="noopener noreferrer">hromp.com</a></p>
+        </footer>
+    </div>
+
+    <script>
+        // Global variables
+        let currentTaskId = null;
+        let isProcessing = false;
+
+        // DOM elements
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const processBtn = document.getElementById('processBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const errorContainer = document.getElementById('errorContainer');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressText = document.getElementById('progressText');
+        const progressPercentage = document.getElementById('progressPercentage');
+        const progressFill = document.getElementById('progressFill');
+        const progressStatus = document.getElementById('progressStatus');
+        const statusBadge = document.getElementById('statusBadge');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const downloadBtn = document.getElementById('downloadBtn');
+
+        // File upload handling
+        fileInput.addEventListener('change', handleFileUpload);
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                // Validate file type
+                const allowedTypes = ['audio/mpeg', 'audio/wav', 'audio/flac', 'audio/mp4'];
+                if (!allowedTypes.includes(file.type)) {
+                    showError('Please select a valid audio file (MP3, WAV, FLAC, or M4A)');
+                    resetFileInput();
+                    return;
+                }
+
+                // Validate file size (50MB limit)
+                const maxSize = 50 * 1024 * 1024;
+                if (file.size > maxSize) {
+                    showError('File size must be less than 50MB');
+                    resetFileInput();
+                    return;
+                }
+
+                // Display file info
+                fileName.textContent = file.name;
+                fileSize.textContent = formatFileSize(file.size);
+                fileInfo.style.display = 'block';
+                processBtn.disabled = false;
+                hideError();
+            }
+        }
+
+        function resetFileInput() {
+            fileInput.value = '';
+            fileInfo.style.display = 'none';
+            processBtn.disabled = true;
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Process button handling
+        processBtn.addEventListener('click', handleProcessAudio);
+
+        async function handleProcessAudio() {
+            const file = fileInput.files[0];
+            if (!file) {
+                showError('Please select a file first');
+                return;
+            }
+
+            isProcessing = true;
+            processBtn.disabled = true;
+            fileInput.disabled = true;
+            hideError();
+            showProgress();
+
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                // Collect chord type selections
+                const chordTypes = {
+                    minor: document.getElementById('minorChords').checked,
+                    seventh: document.getElementById('seventhChords').checked,
+                    minor_seventh: document.getElementById('minorSeventhChords').checked,
+                    major_seventh: document.getElementById('majorSeventhChords').checked,
+                    diminished: document.getElementById('diminishedChords').checked,
+                    augmented: document.getElementById('augmentedChords').checked,
+                    suspended: document.getElementById('suspendedChords').checked,
+                    power: document.getElementById('powerChords').checked,
+                    add_nine: document.getElementById('addNineChords').checked,
+                    sixth: document.getElementById('sixthChords').checked,
+                    minor_sixth: document.getElementById('minorSixthChords').checked
+                };
+
+                formData.append('chord_types', JSON.stringify(chordTypes));
+
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                currentTaskId = result.task_id;
+                
+                // Start polling for status
+                pollStatus();
+                
+            } catch (error) {
+                console.error('Error uploading file:', error);
+                showError(error.message || 'Failed to upload file. Please try again.');
+                resetProcessing();
+            }
+        }
+
+        function showProgress() {
+            progressContainer.style.display = 'block';
+            resultsContainer.style.display = 'none';
+            updateProgress(0, 'Initializing...', 'Starting');
+        }
+
+        function updateProgress(percentage, text, status) {
+            progressPercentage.textContent = `${percentage}%`;
+            progressText.textContent = text;
+            progressStatus.textContent = status;
+            progressFill.style.width = `${percentage}%`;
+            
+            // Update status badge
+            statusBadge.textContent = status;
+            statusBadge.className = `status-badge status-${status.toLowerCase().replace(' ', '-')}`;
+        }
+
+        async function pollStatus() {
+            if (!currentTaskId || !isProcessing) return;
+
+            try {
+                const response = await fetch(`/status/${currentTaskId}`);
+                if (response.ok) {
+                    const status = await response.json();
+                    
+                    let progress = 0;
+                    let text = 'Processing...';
+                    let statusText = 'Processing';
+
+                    switch (status.status) {
+                        case 'processing':
+                            // Map backend step names to user-friendly messages
+                            const stepMessages = {
+                                'Preparing audio file': 'Preparing audio file...',
+                                'Splitting vocal & instrumental': 'Splitting vocal & instrumental...',
+                                'Extracting voice sample': 'Extracting voice sample...',
+                                'Analyzing chord pattern': 'Analyzing chord pattern...',
+                                'Synthesizing spoken chord overlay': 'Synthesizing spoken chord overlay...',
+                                'Overlaying spoken chords onto instrumental track': 'Overlaying spoken chords onto instrumental track...',
+                                'Complete': 'Processing complete!'
+                            };
+                            
+                            text = stepMessages[status.step] || 'Processing...';
+                            progress = getProgressForStep(status.step);
+                            statusText = 'Processing';
+                            break;
+                        case 'completed':
+                            progress = 100;
+                            text = 'Processing complete!';
+                            statusText = 'Completed';
+                            isProcessing = false;
+                            showResults();
+                            return;
+                        case 'error':
+                            progress = 0;
+                            text = 'Processing failed';
+                            statusText = 'Error';
+                            isProcessing = false;
+                            showError(status.message || 'Processing failed');
+                            resetProcessing();
+                            return;
+                    }
+
+                    updateProgress(progress, text, statusText);
+                }
+            } catch (error) {
+                console.error('Error checking status:', error);
+            }
+
+            // Continue polling
+            setTimeout(pollStatus, 1000);
+        }
+
+        function getProgressForStep(step) {
+            const stepProgress = {
+                'Preparing audio file': 10,
+                'Splitting vocal & instrumental': 25,
+                'Extracting voice sample': 35,
+                'Analyzing chord pattern': 50,
+                'Synthesizing spoken chord overlay': 75,
+                'Overlaying spoken chords onto instrumental track': 90,
+                'Complete': 100
+            };
+            return stepProgress[step] || 50;
+        }
+
+        function showResults() {
+            progressContainer.style.display = 'none';
+            resultsContainer.style.display = 'block';
+            
+            // Set up audio player
+            audioPlayer.src = `/download/${currentTaskId}`;
+            
+            // Set up download button
+            downloadBtn.onclick = () => {
+                const link = document.createElement('a');
+                link.href = `/download/${currentTaskId}`;
+                link.download = `chordispeak_${currentTaskId}.wav`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+        }
+
+        function resetProcessing() {
+            isProcessing = false;
+            currentTaskId = null;
+            processBtn.disabled = false;
+            fileInput.disabled = false;
+            progressContainer.style.display = 'none';
+        }
+
+        // Reset button handling
+        resetBtn.addEventListener('click', handleReset);
+
+        function handleReset() {
+            resetFileInput();
+            hideError();
+            progressContainer.style.display = 'none';
+            resultsContainer.style.display = 'none';
+            audioPlayer.pause();
+            audioPlayer.currentTime = 0;
+            resetProcessing();
+        }
+
+        function showError(message) {
+            errorContainer.textContent = message;
+            errorContainer.style.display = 'block';
+        }
+
+        function hideError() {
+            errorContainer.style.display = 'none';
+        }
+
+        // Chord selection buttons
+        const selectAllBtn = document.getElementById('selectAllBtn');
+        const clearAllBtn = document.getElementById('clearAllBtn');
+
+        selectAllBtn.addEventListener('click', function() {
+            const checkboxes = document.querySelectorAll('.chord-checkbox input[type="checkbox"]');
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = true;
+            });
+        });
+
+        clearAllBtn.addEventListener('click', function() {
+            const checkboxes = document.querySelectorAll('.chord-checkbox input[type="checkbox"]');
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = false;
+            });
+        });
+
+        // Initialize
+    </script>
+</body>
+</html>
