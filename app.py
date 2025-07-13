@@ -112,6 +112,23 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 # Task storage (in production, use Redis or database)
 tasks = {}
 
+# Debug mode configuration
+DEBUG_MODE = True  # Set to True to enable debug logging
+task_logs = {}  # Store logs for each task
+
+def log_debug(task_id, message):
+    """Log debug message for a specific task"""
+    if DEBUG_MODE and task_id:
+        if task_id not in task_logs:
+            task_logs[task_id] = []
+        timestamp = time.strftime("%H:%M:%S")
+        log_entry = f"[{timestamp}] {message}"
+        task_logs[task_id].append(log_entry)
+        # Keep only last 100 log entries to prevent memory issues
+        if len(task_logs[task_id]) > 100:
+            task_logs[task_id] = task_logs[task_id][-100:]
+        print(f"[DEBUG {task_id}] {message}")
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -1001,6 +1018,9 @@ def separate_vocals_demucs(audio_path, output_dir, task_id=None):
         import shutil
         import signal
         
+        log_debug(task_id, f"Starting Demucs vocal separation for {audio_path}")
+        log_debug(task_id, f"Output directory: {output_dir}")
+        
         # Use Demucs command line interface with timeout
         cmd = [
             'demucs',
@@ -1010,6 +1030,7 @@ def separate_vocals_demucs(audio_path, output_dir, task_id=None):
             '--mp3-bitrate', '128',  # Lower bitrate for speed
             audio_path
         ]
+        log_debug(task_id, f"Running Demucs command: {' '.join(cmd)}")
         print(f"Running Demucs command: {' '.join(cmd)}")
         
         # Update task status if task_id is provided
@@ -1035,6 +1056,7 @@ def separate_vocals_demucs(audio_path, output_dir, task_id=None):
                 
                 if stdout_line:
                     stdout_lines.append(stdout_line.strip())
+                    log_debug(task_id, f"Demucs stdout: {stdout_line.strip()}")
                     print(f"[TASK {task_id}] Demucs stdout: {stdout_line.strip()}")
                     
                     # Update task status with progress if we detect progress info
@@ -1086,6 +1108,7 @@ def separate_vocals_demucs(audio_path, output_dir, task_id=None):
                     
                 if stderr_line:
                     stderr_lines.append(stderr_line.strip())
+                    log_debug(task_id, f"Demucs stderr: {stderr_line.strip()}")
                     print(f"[TASK {task_id}] Demucs stderr: {stderr_line.strip()}")
                     
                     # Also check stderr for progress information
@@ -1143,11 +1166,13 @@ def separate_vocals_demucs(audio_path, output_dir, task_id=None):
                 return None, None
                 
         except subprocess.TimeoutExpired:
+            log_debug(task_id, "Demucs command timed out after 15 minutes")
             print("Demucs command timed out after 15 minutes")
             if task_id and task_id in tasks:
                 tasks[task_id]['step'] = 'Demucs timed out after 15 minutes'
             return None, None
         except Exception as e:
+            log_debug(task_id, f"Demucs subprocess error: {e}")
             print(f"Demucs subprocess error: {e}")
             if task_id and task_id in tasks:
                 tasks[task_id]['step'] = f'Demucs error: {str(e)}'
@@ -1216,8 +1241,11 @@ def separate_vocals_demucs(audio_path, output_dir, task_id=None):
 
 def process_audio_task(task_id, file_path):
     """Background task to process audio file"""
+    log_debug(task_id, "Starting audio processing task")
+    
     if not lazy_import_audio_deps():
         error_msg = "Audio processing dependencies not available. Cannot process audio."
+        log_debug(task_id, f"ERROR: {error_msg}")
         print(f"ERROR: {error_msg}")
         tasks[task_id]['status'] = 'error'
         tasks[task_id]['error'] = error_msg
@@ -1868,6 +1896,7 @@ def debug_task(task_id):
         return jsonify({'error': 'Task not found'}), 404
     
     task = tasks[task_id]
+    logs = task_logs.get(task_id, [])
     return jsonify({
         'task_id': task_id,
         'status': task.get('status', 'unknown'),
@@ -1876,7 +1905,20 @@ def debug_task(task_id):
         'demucs_percentage': task.get('demucs_percentage', 0),
         'error': task.get('error', None),
         'filename': task.get('filename', 'unknown'),
-        'output_file': task.get('output_file', None)
+        'output_file': task.get('output_file', None),
+        'logs': logs
+    })
+
+@app.route('/logs/<task_id>')
+def get_task_logs(task_id):
+    """Get debug logs for a specific task"""
+    if task_id not in tasks:
+        return jsonify({'error': 'Task not found'}), 404
+    
+    logs = task_logs.get(task_id, [])
+    return jsonify({
+        'task_id': task_id,
+        'logs': logs
     })
 
 def test_pronunciation_strategies():

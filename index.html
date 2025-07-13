@@ -275,6 +275,50 @@
             transform: none;
         }
 
+        /* Debug Panel Styles */
+        .debug-panel {
+            margin-top: 1.5rem;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border: 1px solid #e9ecef;
+        }
+
+        .debug-panel h3 {
+            color: #333;
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+        }
+
+        .debug-logs {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8rem;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-bottom: 1rem;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .debug-toggle {
+            background: #4a5568;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .debug-toggle:hover {
+            background: #2d3748;
+        }
+
         /* Action buttons */
         .action-buttons {
             display: flex;
@@ -747,6 +791,16 @@
                         <div class="progress-fill" id="progressFill"></div>
                     </div>
                     <div class="status-badge" id="statusBadge">Starting</div>
+                    
+                    <!-- Debug Panel -->
+                    <div class="debug-panel" id="debugPanel" style="display: none;">
+                        <h3>🔍 Debug Logs</h3>
+                        <div class="debug-logs" id="debugLogs">
+                            <p>Loading debug logs...</p>
+                        </div>
+                        <button class="debug-toggle" id="debugToggle">📋 Show/Hide Debug</button>
+                    </div>
+                    
                     <div class="modal-actions">
                         <button class="cancel-button" id="cancelBtn">❌ Cancel</button>
                     </div>
@@ -811,6 +865,9 @@
         const audioPlayer = document.getElementById('audioPlayer');
         const downloadBtn = document.getElementById('downloadBtn');
         const cancelBtn = document.getElementById('cancelBtn');
+        const debugPanel = document.getElementById('debugPanel');
+        const debugLogs = document.getElementById('debugLogs');
+        const debugToggle = document.getElementById('debugToggle');
 
         // File upload handling
         fileInput.addEventListener('change', handleFileUpload);
@@ -862,6 +919,9 @@
 
         // Cancel button handling
         cancelBtn.addEventListener('click', handleCancelTask);
+
+        // Debug toggle handling
+        debugToggle.addEventListener('click', toggleDebugPanel);
 
         async function handleProcessAudio() {
             const file = fileInput.files[0];
@@ -939,6 +999,11 @@
             progressModal.classList.add('show');
             resultsContainer.style.display = 'none';
             updateProgress(0, 'Initializing...', 'Starting');
+            // Show debug panel after a few seconds
+            setTimeout(() => {
+                debugPanel.style.display = 'block';
+                startDebugPolling();
+            }, 3000);
         }
 
         function updateProgress(percentage, text, status) {
@@ -1208,6 +1273,50 @@
 
         function hideError() {
             errorContainer.style.display = 'none';
+        }
+
+        // Debug functions
+        function toggleDebugPanel() {
+            if (debugPanel.style.display === 'none') {
+                debugPanel.style.display = 'block';
+                debugToggle.textContent = '📋 Hide Debug';
+            } else {
+                debugPanel.style.display = 'none';
+                debugToggle.textContent = '📋 Show Debug';
+            }
+        }
+
+        function startDebugPolling() {
+            if (!currentTaskId) return;
+            
+            // Poll for debug logs every 2 seconds
+            const debugInterval = setInterval(async () => {
+                if (!isProcessing || !currentTaskId) {
+                    clearInterval(debugInterval);
+                    return;
+                }
+                
+                try {
+                    const response = await fetch(`/logs/${currentTaskId}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        updateDebugLogs(data.logs);
+                    }
+                } catch (error) {
+                    console.error('Error fetching debug logs:', error);
+                }
+            }, 2000);
+        }
+
+        function updateDebugLogs(logs) {
+            if (!logs || logs.length === 0) {
+                debugLogs.innerHTML = '<p>No debug logs available yet...</p>';
+                return;
+            }
+            
+            const logText = logs.join('\n');
+            debugLogs.textContent = logText;
+            debugLogs.scrollTop = debugLogs.scrollHeight; // Auto-scroll to bottom
         }
 
         // Remove chord selection buttons and related JS
