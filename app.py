@@ -1093,13 +1093,14 @@ def separate_vocals_demucs(audio_path, output_dir, task_id=None):
         log_debug(task_id, f"Output directory: {output_dir}")
         
         # Use Demucs command line interface with timeout
+        # Temporarily disable GPU to test if that's causing the issue
         cmd = [
             'demucs',
             '--two-stems=vocals',  # Separate vocals from the rest
             '--out', output_dir,
             '--mp3',  # Use MP3 output for faster processing
             '--mp3-bitrate', '128',  # Lower bitrate for speed
-            '--device', 'cuda',  # Enable GPU acceleration
+            # '--device', 'cuda',  # Temporarily disabled GPU acceleration for testing
             audio_path
         ]
         log_debug(task_id, f"Running Demucs command: {' '.join(cmd)}")
@@ -1114,15 +1115,23 @@ def separate_vocals_demucs(audio_path, output_dir, task_id=None):
         
         # Run with timeout (15 minutes max) and show real-time output
         try:
+            log_debug(task_id, f"Starting Demucs subprocess with command: {' '.join(cmd)}")
             # Use Popen to get real-time output
             process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, 
                                      text=True, bufsize=1, universal_newlines=True)
+            log_debug(task_id, f"Demucs subprocess started with PID: {process.pid}")
             
             stdout_lines = []
             stderr_lines = []
             
             # Read output in real-time
+            log_debug(task_id, "Starting to read Demucs output...")
+            iteration_count = 0
             while True:
+                iteration_count += 1
+                if iteration_count % 100 == 0:  # Log every 100 iterations to show we're still alive
+                    log_debug(task_id, f"Demucs output reading iteration: {iteration_count}")
+                
                 stdout_line = process.stdout.readline()
                 stderr_line = process.stderr.readline()
                 
@@ -1240,8 +1249,15 @@ def separate_vocals_demucs(audio_path, output_dir, task_id=None):
             
             # Wait for process to complete
             log_debug(task_id, "Waiting for Demucs process to complete...")
-            result = process.wait(timeout=900)
-            log_debug(task_id, f"Demucs process completed with return code: {result}")
+            try:
+                result = process.wait(timeout=900)
+                log_debug(task_id, f"Demucs process completed with return code: {result}")
+            except subprocess.TimeoutExpired:
+                log_debug(task_id, "Demucs process timed out after 15 minutes")
+                raise
+            except Exception as e:
+                log_debug(task_id, f"Error waiting for Demucs process: {e}")
+                raise
             
             if result != 0:
                 log_debug(task_id, f"Demucs command failed with return code {result}")
