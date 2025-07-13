@@ -1419,7 +1419,20 @@ def process_audio_task(task_id, file_path):
 @app.route('/')
 def index():
     """Serve the main application page"""
-    return send_file('index.html')
+    try:
+        return send_file('index.html')
+    except Exception as e:
+        print(f"Error serving index.html: {e}")
+        return f"Error: {str(e)}", 500
+
+@app.route('/test')
+def test():
+    """Simple test route to verify the app is working"""
+    return jsonify({
+        'status': 'ok',
+        'message': 'Flask app is running',
+        'version': VERSION
+    })
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
