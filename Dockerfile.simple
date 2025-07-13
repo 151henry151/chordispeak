@@ -1,0 +1,25 @@
+# Use the official Python 3.11 image
+FROM python:3.11-slim
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Set work directory
+WORKDIR /app
+
+# Copy minimal requirements and install
+COPY requirements_simple.txt .
+RUN pip install -r requirements_simple.txt
+
+# Copy project files
+COPY . .
+
+# Set the port for Cloud Run
+ENV PORT=8080
+
+# Expose the port
+EXPOSE 8080
+
+# Run the simple Flask app with Gunicorn
+CMD gunicorn -b 0.0.0.0:$PORT app_simple:app 

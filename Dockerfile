@@ -27,5 +27,5 @@ ENV PORT=8080
 # Expose the port
 EXPOSE 8080
 
-# Run the minimal Flask app with Gunicorn for testing
-CMD gunicorn -b 0.0.0.0:$PORT app_minimal:app 
+# Run the simple Flask app with Gunicorn for testing
+CMD gunicorn -b 0.0.0.0:$PORT app_simple:app 
