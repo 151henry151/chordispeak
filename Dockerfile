@@ -11,10 +11,10 @@ WORKDIR /app
 # Install system dependencies
 RUN apt-get update && apt-get install -y ffmpeg git && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies (including Cython first)
+# Install core scientific dependencies first (required for madmom build)
 COPY requirements.txt .
 RUN pip install --upgrade pip && \
-    pip install Cython && \
+    pip install Cython numpy scipy && \
     pip install -r requirements.txt
 
 # Copy project files
