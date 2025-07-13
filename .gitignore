@@ -153,3 +153,6 @@ ehthumbs.db
 Desktop.ini
 
 # Project specific
+
+# Cursor IDE
+.cursor/

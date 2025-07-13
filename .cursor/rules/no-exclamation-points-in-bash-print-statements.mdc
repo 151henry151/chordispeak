@@ -1,6 +1,0 @@
----
-description: 
-globs: 
-alwaysApply: true
----
-Don't use exclamation points in bash print statements.
