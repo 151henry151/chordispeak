@@ -8,11 +8,11 @@ ENV PYTHONUNBUFFERED=1
 # Set work directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y ffmpeg git && rm -rf /var/lib/apt/lists/*
+# Install system dependencies and build tools
+RUN apt-get update && apt-get install -y ffmpeg git build-essential && rm -rf /var/lib/apt/lists/*
 
 # Install build dependencies first
-RUN pip install --upgrade pip && pip install numpy==1.26.4 scipy==1.16.0 Cython==3.1.2
+RUN pip install --upgrade pip wheel && pip install numpy==1.26.4 scipy==1.16.0 Cython==3.1.2
 
 # Copy and install the rest of the requirements
 COPY requirements.txt .
