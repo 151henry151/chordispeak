@@ -16,7 +16,7 @@ RUN pip install --upgrade pip wheel && pip install numpy==1.26.4 scipy==1.16.0 C
 
 # Copy and install the rest of the requirements
 COPY requirements.txt .
-RUN pip install --no-deps -r requirements.txt
+RUN pip install -r requirements.txt
 
 # Copy project files
 COPY . .
