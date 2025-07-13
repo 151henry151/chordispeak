@@ -1147,9 +1147,27 @@ def separate_vocals_demucs(audio_path, output_dir, task_id=None):
                     process.terminate()
                     raise subprocess.TimeoutExpired(cmd, 300)
                 
+                # Check if process has died unexpectedly
+                if process.poll() is not None:
+                    log_debug(task_id, f"Demucs process died unexpectedly with return code: {process.returncode}")
+                    # Read any remaining output
+                    remaining_stdout = process.stdout.read()
+                    remaining_stderr = process.stderr.read()
+                    if remaining_stdout:
+                        log_debug(task_id, f"Remaining stdout: {remaining_stdout}")
+                    if remaining_stderr:
+                        log_debug(task_id, f"Remaining stderr: {remaining_stderr}")
+                    break
+                
                 # Log progress every 10 seconds to show we're still alive
                 if current_time - last_output_time > 10:
-                    log_debug(task_id, f"Demucs still running - iteration {iteration_count}, process alive: {process.poll() is None}")
+                    # Check system memory usage
+                    try:
+                        import psutil
+                        memory_info = psutil.virtual_memory()
+                        log_debug(task_id, f"Demucs still running - iteration {iteration_count}, process alive: {process.poll() is None}, memory: {memory_info.percent}% used ({memory_info.available / 1024**3:.1f}GB free)")
+                    except ImportError:
+                        log_debug(task_id, f"Demucs still running - iteration {iteration_count}, process alive: {process.poll() is None}")
                     last_output_time = current_time
                 
                 # Use select to check if there's data available (non-blocking)
@@ -1163,6 +1181,11 @@ def separate_vocals_demucs(audio_path, output_dir, task_id=None):
                     stdout_line = process.stdout.readline()
                 if process.stderr in ready_to_read:
                     stderr_line = process.stderr.readline()
+                
+                # If no data is ready to read and process has finished, break
+                if not ready_to_read and process.poll() is not None:
+                    log_debug(task_id, f"Demucs process finished, no more output to read")
+                    break
                 
                 if stdout_line:
                     stdout_lines.append(stdout_line.strip())
