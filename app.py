@@ -267,19 +267,25 @@ def format_chord_for_tts(chord_text):
 
 def extract_voice_sample(vocals_path, sample_duration=None):
     """Extract voice sample from separated vocals for voice cloning"""
+    print(f"extract_voice_sample called with vocals_path: {vocals_path}")
+    
     if not lazy_import_audio_deps():
         print("Audio processing dependencies not available")
         return None, None
         
     try:
+        print(f"Loading vocals with librosa from: {vocals_path}")
         # Use the full vocal track for better voice cloning
         y, sr = librosa.load(vocals_path)
+        print(f"Vocals loaded successfully: shape={y.shape}, sr={sr}")
         
         # Return the entire vocal track
         return y, sr
         
     except Exception as e:
         print(f"Voice sample extraction error: {e}")
+        import traceback
+        traceback.print_exc()
         return None, None
 
 def synthesize_chord_speech_coqui(text, voice_sample_path, output_path):
@@ -1325,20 +1331,37 @@ def process_audio_task(task_id, file_path):
         tasks[task_id]['step'] = 'Extracting voice sample'
         tasks[task_id]['progress'] = 30
         print(f"[TASK {task_id}] Progress: 30% - Extracting voice sample")
-        voice_sample, voice_sr = extract_voice_sample(vocals_path)
-        voice_sample_path = None
-        if voice_sample is not None:
-            voice_sample_path = os.path.join(task_dir, 'voice_sample.wav')
-            write_wav(voice_sample_path, voice_sr, voice_sample)
-            print(f"Voice sample extracted: {voice_sample_path}")
-        else:
-            print("WARNING: Voice sample extraction failed")
+        log_debug(task_id, f"Starting voice sample extraction from: {vocals_path}")
+        log_debug(task_id, f"Vocals file exists: {os.path.exists(vocals_path)}")
+        log_debug(task_id, f"Vocals file size: {os.path.getsize(vocals_path) if os.path.exists(vocals_path) else 'N/A'} bytes")
+        
+        try:
+            voice_sample, voice_sr = extract_voice_sample(vocals_path)
+            log_debug(task_id, f"Voice sample extraction result: voice_sample={voice_sample is not None}, voice_sr={voice_sr}")
+            voice_sample_path = None
+            if voice_sample is not None:
+                voice_sample_path = os.path.join(task_dir, 'voice_sample.wav')
+                log_debug(task_id, f"Writing voice sample to: {voice_sample_path}")
+                write_wav(voice_sample_path, voice_sr, voice_sample)
+                log_debug(task_id, f"Voice sample written successfully: {voice_sample_path}")
+                print(f"Voice sample extracted: {voice_sample_path}")
+            else:
+                log_debug(task_id, "WARNING: Voice sample extraction returned None")
+                print("WARNING: Voice sample extraction failed")
+        except Exception as e:
+            log_debug(task_id, f"ERROR in voice sample extraction: {e}")
+            print(f"ERROR in voice sample extraction: {e}")
+            import traceback
+            traceback.print_exc()
         
         # Step 4: Chord detection (using instrumental track)
         print(f"\n=== [TASK {task_id}] STEP 4: CHORD DETECTION ===")
         tasks[task_id]['step'] = 'Analyzing chord pattern'
         tasks[task_id]['progress'] = 40
         print(f"[TASK {task_id}] Progress: 40% - Analyzing chord pattern")
+        log_debug(task_id, f"Starting chord detection with instrumental file: {instrumental_path}")
+        log_debug(task_id, f"Instrumental file exists: {os.path.exists(instrumental_path)}")
+        log_debug(task_id, f"Instrumental file size: {os.path.getsize(instrumental_path) if os.path.exists(instrumental_path) else 'N/A'} bytes")
         
         chord_start = time.time()
         print(f"[TASK {task_id}] Starting chord detection with madmom...")
@@ -1347,14 +1370,19 @@ def process_audio_task(task_id, file_path):
         
         try:
             # Use madmom's default detection with progress tracking
+            log_debug(task_id, "Calling detect_chords function...")
             chords = detect_chords(instrumental_path, task_id=task_id)
+            log_debug(task_id, f"detect_chords returned {len(chords)} chords")
             chord_time = time.time() - chord_start
             print(f"[TASK {task_id}] Chord detection completed in {chord_time:.2f} seconds")
             print(f"[TASK {task_id}] Detected {len(chords)} chords")
             tasks[task_id]['progress'] = 65
             print(f"[TASK {task_id}] Progress: 65% - Chord detection completed")
         except Exception as chord_error:
+            log_debug(task_id, f"ERROR in chord detection: {chord_error}")
             print(f"[TASK {task_id}] ERROR in chord detection: {chord_error}")
+            import traceback
+            traceback.print_exc()
             raise RuntimeError(f"Chord detection failed: {str(chord_error)}")
         
         # Save chord data
