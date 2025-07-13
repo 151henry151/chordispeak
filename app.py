@@ -1179,32 +1179,42 @@ def separate_vocals_demucs(audio_path, output_dir, task_id=None):
             return None, None
             
         demucs_output = os.path.join(output_dir, 'htdemucs')
+        log_debug(task_id, f"Looking for demucs output in: {demucs_output}")
         print(f"Looking for demucs output in: {demucs_output}")
         
         if not os.path.exists(demucs_output):
+            log_debug(task_id, f"Demucs output directory not found: {demucs_output}")
             print(f"Demucs output directory not found: {demucs_output}")
             # List contents of output_dir to see what was created
             if os.path.exists(output_dir):
-                print(f"Contents of {output_dir}: {os.listdir(output_dir)}")
+                contents = os.listdir(output_dir)
+                log_debug(task_id, f"Contents of {output_dir}: {contents}")
+                print(f"Contents of {output_dir}: {contents}")
             return None, None
             
         # List contents of demucs_output to see what's there
-        print(f"Contents of demucs output directory: {os.listdir(demucs_output)}")
+        demucs_contents = os.listdir(demucs_output)
+        log_debug(task_id, f"Contents of demucs output directory: {demucs_contents}")
+        print(f"Contents of demucs output directory: {demucs_contents}")
         
         # Look for both .wav and .mp3 files
         vocals_files = glob.glob(os.path.join(demucs_output, '*', 'vocals.*'))
         no_vocals_files = glob.glob(os.path.join(demucs_output, '*', 'no_vocals.*'))
         
+        log_debug(task_id, f"Found vocals files: {vocals_files}")
+        log_debug(task_id, f"Found no_vocals files: {no_vocals_files}")
         print(f"Found vocals files: {vocals_files}")
         print(f"Found no_vocals files: {no_vocals_files}")
         
         if not vocals_files or not no_vocals_files:
+            log_debug(task_id, f"Demucs output files not found. Vocals: {vocals_files}, No vocals: {no_vocals_files}")
             print(f"Demucs output files not found. Vocals: {vocals_files}, No vocals: {no_vocals_files}")
             # Try to find any files in the demucs output
             all_files = []
             for root, dirs, files in os.walk(demucs_output):
                 for file in files:
                     all_files.append(os.path.join(root, file))
+            log_debug(task_id, f"All files in demucs output: {all_files}")
             print(f"All files in demucs output: {all_files}")
             return None, None
             
@@ -1230,6 +1240,7 @@ def separate_vocals_demucs(audio_path, output_dir, task_id=None):
         else:
             shutil.copy2(no_vocals_source, instrumental_track_path)
             
+        log_debug(task_id, f"Vocal separation completed: {vocal_track_path}, {instrumental_track_path}")
         print(f"Vocal separation completed: {vocal_track_path}, {instrumental_track_path}")
         return vocal_track_path, instrumental_track_path
         
@@ -1287,10 +1298,13 @@ def process_audio_task(task_id, file_path):
         tasks[task_id]['progress'] = 10
         print(f"[TASK {task_id}] Progress: 10% - Starting vocal separation")
         vocals_path, instrumental_path = separate_vocals_demucs(wav_path, task_dir, task_id)
+        log_debug(task_id, f"Demucs returned: vocals={vocals_path}, instrumental={instrumental_path}")
         if vocals_path is None or instrumental_path is None:
             error_msg = "Demucs vocal separation failed. Cannot proceed without proper vocal separation."
+            log_debug(task_id, f"ERROR: {error_msg}")
             print(f"ERROR: {error_msg}")
             raise RuntimeError(error_msg)
+        log_debug(task_id, f"Vocal separation completed: {vocals_path}, {instrumental_path}")
         print(f"Vocal separation completed: {vocals_path}, {instrumental_path}")
         
         # Step 3: Extract voice sample from vocals for voice cloning
