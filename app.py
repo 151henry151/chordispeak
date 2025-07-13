@@ -29,6 +29,12 @@ import shutil
 from threading import Thread
 import time
 
+# GPU Optimization: Set environment variables for optimal GPU performance
+os.environ.setdefault('CUDA_VISIBLE_DEVICES', '0')
+os.environ.setdefault('PYTORCH_CUDA_ALLOC_CONF', 'max_split_size_mb:128')
+os.environ.setdefault('CUDA_LAUNCH_BLOCKING', '0')  # Non-blocking CUDA operations
+os.environ.setdefault('TORCH_CUDNN_V8_API_ENABLED', '1')  # Enable cuDNN v8
+
 # Lazy imports for heavy dependencies
 librosa = None
 np = None
@@ -85,6 +91,19 @@ def lazy_import_tts():
             import torch
             from TTS.api import TTS
             TTS_AVAILABLE = True
+            
+            # GPU detection and logging
+            print(f"PyTorch version: {torch.__version__}")
+            print(f"CUDA available: {torch.cuda.is_available()}")
+            if torch.cuda.is_available():
+                print(f"CUDA device count: {torch.cuda.device_count()}")
+                print(f"Current CUDA device: {torch.cuda.current_device()}")
+                print(f"CUDA device name: {torch.cuda.get_device_name()}")
+                print(f"CUDA memory allocated: {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
+                print(f"CUDA memory cached: {torch.cuda.memory_reserved() / 1024**3:.2f} GB")
+            else:
+                print("CUDA not available - using CPU")
+                
         except ImportError:
             TTS_AVAILABLE = False
             print("Coqui TTS not available. Please install Coqui TTS (XTTS v2) to use this app.")
@@ -304,7 +323,18 @@ def synthesize_chord_speech_coqui(text, voice_sample_path, output_path):
         
         # Initialize TTS with XTTS v2 model
         device = "cuda" if torch.cuda.is_available() else "cpu"
+        print(f"TTS using device: {device}")
+        
+        # GPU memory optimization
+        if device == "cuda":
+            # Clear GPU cache before loading model
+            torch.cuda.empty_cache()
+            print(f"GPU memory before TTS model load: {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
+        
         tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
+        
+        if device == "cuda":
+            print(f"GPU memory after TTS model load: {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
         
         # Convert chord to phonemes
         phoneme_text = chord_to_ipa_phonemes(text)
@@ -319,6 +349,11 @@ def synthesize_chord_speech_coqui(text, voice_sample_path, output_path):
             language="en",
             file_path=output_path
         )
+        
+        # GPU memory cleanup after synthesis
+        if device == "cuda":
+            torch.cuda.empty_cache()
+            print(f"GPU memory after TTS synthesis: {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
         
         # Restore original torch.load
         torch.load = original_torch_load
@@ -1034,6 +1069,7 @@ def separate_vocals_demucs(audio_path, output_dir, task_id=None):
             '--out', output_dir,
             '--mp3',  # Use MP3 output for faster processing
             '--mp3-bitrate', '128',  # Lower bitrate for speed
+            '--device', 'cuda',  # Enable GPU acceleration
             audio_path
         ]
         log_debug(task_id, f"Running Demucs command: {' '.join(cmd)}")
@@ -1272,6 +1308,19 @@ def separate_vocals_demucs(audio_path, output_dir, task_id=None):
 def process_audio_task(task_id, file_path):
     """Background task to process audio file"""
     log_debug(task_id, "Starting audio processing task")
+    
+    # GPU detection and logging for this task
+    try:
+        import torch
+        log_debug(task_id, f"PyTorch version: {torch.__version__}")
+        log_debug(task_id, f"CUDA available: {torch.cuda.is_available()}")
+        if torch.cuda.is_available():
+            log_debug(task_id, f"CUDA device: {torch.cuda.get_device_name()}")
+            log_debug(task_id, f"CUDA memory: {torch.cuda.memory_allocated() / 1024**3:.2f} GB allocated")
+        else:
+            log_debug(task_id, "Using CPU for processing")
+    except ImportError:
+        log_debug(task_id, "PyTorch not available")
     
     if not lazy_import_audio_deps():
         error_msg = "Audio processing dependencies not available. Cannot process audio."
@@ -1613,10 +1662,33 @@ def get_chords(task_id):
 
 @app.route('/health')
 def health_check():
+    """Health check endpoint"""
+    # GPU detection for health check
+    gpu_info = {}
+    try:
+        import torch
+        gpu_info['pytorch_version'] = torch.__version__
+        gpu_info['cuda_available'] = torch.cuda.is_available()
+        if torch.cuda.is_available():
+            gpu_info['cuda_device_count'] = torch.cuda.device_count()
+            gpu_info['cuda_device_name'] = torch.cuda.get_device_name()
+            gpu_info['cuda_memory_allocated_gb'] = round(torch.cuda.memory_allocated() / 1024**3, 2)
+        else:
+            gpu_info['cuda_device_count'] = 0
+            gpu_info['cuda_device_name'] = 'None'
+            gpu_info['cuda_memory_allocated_gb'] = 0
+    except ImportError:
+        gpu_info['pytorch_version'] = 'Not available'
+        gpu_info['cuda_available'] = False
+        gpu_info['cuda_device_count'] = 0
+        gpu_info['cuda_device_name'] = 'None'
+        gpu_info['cuda_memory_allocated_gb'] = 0
+    
     return jsonify({
         'status': 'healthy',
         'version': VERSION,
-        'name': 'ChordiSpeak'
+        'name': 'ChordiSpeak',
+        'gpu': gpu_info
     })
 
 @app.route('/docs')
@@ -1975,6 +2047,55 @@ def get_task_logs(task_id):
         'task_id': task_id,
         'logs': logs
     })
+
+@app.route('/gpu-info')
+def get_gpu_info():
+    """Get detailed GPU information for debugging"""
+    gpu_info = {}
+    try:
+        import torch
+        gpu_info['pytorch_version'] = torch.__version__
+        gpu_info['cuda_available'] = torch.cuda.is_available()
+        gpu_info['cuda_version'] = torch.version.cuda if torch.cuda.is_available() else 'None'
+        
+        if torch.cuda.is_available():
+            gpu_info['cuda_device_count'] = torch.cuda.device_count()
+            gpu_info['cuda_current_device'] = torch.cuda.current_device()
+            gpu_info['cuda_device_name'] = torch.cuda.get_device_name()
+            gpu_info['cuda_memory_allocated_gb'] = round(torch.cuda.memory_allocated() / 1024**3, 2)
+            gpu_info['cuda_memory_reserved_gb'] = round(torch.cuda.memory_reserved() / 1024**3, 2)
+            gpu_info['cuda_memory_cached_gb'] = round(torch.cuda.memory_reserved() / 1024**3, 2)
+            
+            # Get GPU properties
+            props = torch.cuda.get_device_properties(0)
+            gpu_info['gpu_name'] = props.name
+            gpu_info['gpu_memory_total_gb'] = round(props.total_memory / 1024**3, 2)
+            gpu_info['gpu_memory_free_gb'] = round((props.total_memory - torch.cuda.memory_allocated()) / 1024**3, 2)
+        else:
+            gpu_info['cuda_device_count'] = 0
+            gpu_info['cuda_current_device'] = -1
+            gpu_info['cuda_device_name'] = 'None'
+            gpu_info['cuda_memory_allocated_gb'] = 0
+            gpu_info['cuda_memory_reserved_gb'] = 0
+            gpu_info['cuda_memory_cached_gb'] = 0
+            gpu_info['gpu_name'] = 'None'
+            gpu_info['gpu_memory_total_gb'] = 0
+            gpu_info['gpu_memory_free_gb'] = 0
+    except ImportError:
+        gpu_info['pytorch_version'] = 'Not available'
+        gpu_info['cuda_available'] = False
+        gpu_info['cuda_version'] = 'None'
+        gpu_info['cuda_device_count'] = 0
+        gpu_info['cuda_current_device'] = -1
+        gpu_info['cuda_device_name'] = 'None'
+        gpu_info['cuda_memory_allocated_gb'] = 0
+        gpu_info['cuda_memory_reserved_gb'] = 0
+        gpu_info['cuda_memory_cached_gb'] = 0
+        gpu_info['gpu_name'] = 'None'
+        gpu_info['gpu_memory_total_gb'] = 0
+        gpu_info['gpu_memory_free_gb'] = 0
+    
+    return jsonify(gpu_info)
 
 def test_pronunciation_strategies():
     """Test different pronunciation strategies for letter names"""
