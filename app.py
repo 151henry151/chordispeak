@@ -23,27 +23,20 @@ import re
 from flask import Flask, request, jsonify, send_file, render_template_string
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
-import librosa
-import numpy as np
-from pydub import AudioSegment
 import subprocess
 import tempfile
 import shutil
 from threading import Thread
 import time
-from scipy.io.wavfile import write as write_wav
 
-# Fix for madmom Python 3.11 compatibility issue
-import collections
-if not hasattr(collections, 'MutableSequence'):
-    from collections.abc import MutableSequence
-    collections.MutableSequence = MutableSequence
-
-# Fix for madmom numpy compatibility issue
-if not hasattr(np, 'float'):
-    np.float = float
-if not hasattr(np, 'int'):
-    np.int = int
+# Lazy imports for heavy dependencies
+librosa = None
+np = None
+AudioSegment = None
+write_wav = None
+torch = None
+TTS = None
+TTS_AVAILABLE = False
 
 def get_version():
     """Read version from VERSION file"""
@@ -55,14 +48,48 @@ def get_version():
 
 VERSION = get_version()
 
-# Try to import TTS, error if not available
-try:
-    import torch
-    from TTS.api import TTS
-    TTS_AVAILABLE = True
-except ImportError:
-    TTS_AVAILABLE = False
-    print("Coqui TTS not available. Please install Coqui TTS (XTTS v2) to use this app.")
+def lazy_import_audio_deps():
+    """Lazy import audio processing dependencies"""
+    global librosa, np, AudioSegment, write_wav
+    
+    if librosa is None:
+        try:
+            import librosa
+            import numpy as np
+            from pydub import AudioSegment
+            from scipy.io.wavfile import write as write_wav
+            
+            # Fix for madmom Python 3.11 compatibility issue
+            import collections
+            if not hasattr(collections, 'MutableSequence'):
+                from collections.abc import MutableSequence
+                collections.MutableSequence = MutableSequence
+
+            # Fix for madmom numpy compatibility issue
+            if not hasattr(np, 'float'):
+                np.float = float
+            if not hasattr(np, 'int'):
+                np.int = int
+                
+        except ImportError as e:
+            print(f"Warning: Audio processing dependencies not available: {e}")
+            return False
+    return True
+
+def lazy_import_tts():
+    """Lazy import TTS dependencies"""
+    global torch, TTS, TTS_AVAILABLE
+    
+    if TTS is None:
+        try:
+            import torch
+            from TTS.api import TTS
+            TTS_AVAILABLE = True
+        except ImportError:
+            TTS_AVAILABLE = False
+            print("Coqui TTS not available. Please install Coqui TTS (XTTS v2) to use this app.")
+    
+    return TTS_AVAILABLE
 
 app = Flask(__name__)
 CORS(app)
@@ -223,6 +250,10 @@ def format_chord_for_tts(chord_text):
 
 def extract_voice_sample(vocals_path, sample_duration=None):
     """Extract voice sample from separated vocals for voice cloning"""
+    if not lazy_import_audio_deps():
+        print("Audio processing dependencies not available")
+        return None, None
+        
     try:
         # Use the full vocal track for better voice cloning
         y, sr = librosa.load(vocals_path)
@@ -236,11 +267,10 @@ def extract_voice_sample(vocals_path, sample_duration=None):
 
 def synthesize_chord_speech_coqui(text, voice_sample_path, output_path):
     """Generate speech using Coqui XTTS v2 voice cloning with phoneme support"""
-    if not TTS_AVAILABLE:
+    if not lazy_import_tts():
         raise RuntimeError("Coqui TTS not available. Please install Coqui TTS (XTTS v2).")
     try:
         # Fix for PyTorch 2.6+ weights_only issue - monkey patch torch.load
-        import torch
         original_torch_load = torch.load
         
         def patched_torch_load(*args, **kwargs):
@@ -276,7 +306,7 @@ def synthesize_chord_speech_coqui(text, voice_sample_path, output_path):
 
 def synthesize_chord_speech(text, voice_sample_path, output_path):
     """Generate speech using only Coqui XTTS v2 voice cloning"""
-    if not TTS_AVAILABLE:
+    if not lazy_import_tts():
         raise RuntimeError("Coqui TTS not available. Please install Coqui TTS (XTTS v2).")
     if not voice_sample_path or not os.path.exists(voice_sample_path):
         raise RuntimeError("Voice sample for cloning not found. Cannot synthesize without a reference voice.")
@@ -284,6 +314,9 @@ def synthesize_chord_speech(text, voice_sample_path, output_path):
 
 def detect_chords(audio_file, chord_types=None, task_id=None):
     """Detect chords from audio file using madmom for accurate chord recognition with progress tracking"""
+    if not lazy_import_audio_deps():
+        raise RuntimeError("Audio processing dependencies not available. Cannot perform chord detection.")
+        
     try:
         import time
         from madmom.audio.chroma import DeepChromaProcessor
@@ -562,6 +595,10 @@ def convert_madmom_chord(madmom_label):
 
 def detect_chords_fallback(audio_file, chord_types=None):
     """Fallback chord detection using librosa if madmom fails"""
+    if not lazy_import_audio_deps():
+        print("Audio processing dependencies not available")
+        return []
+        
     try:
         y, sr = librosa.load(audio_file)
         
@@ -1179,6 +1216,14 @@ def separate_vocals_demucs(audio_path, output_dir, task_id=None):
 
 def process_audio_task(task_id, file_path):
     """Background task to process audio file"""
+    if not lazy_import_audio_deps():
+        error_msg = "Audio processing dependencies not available. Cannot process audio."
+        print(f"ERROR: {error_msg}")
+        tasks[task_id]['status'] = 'error'
+        tasks[task_id]['error'] = error_msg
+        tasks[task_id]['step'] = f'Error: {error_msg}'
+        return
+        
     try:
         import time
         start_time = time.time()
