@@ -372,13 +372,17 @@ def synthesize_chord_speech(text, voice_sample_path, output_path):
 
 def detect_chords(audio_file, chord_types=None, task_id=None):
     """Detect chords from audio file using madmom for accurate chord recognition with progress tracking"""
+    print(f"[TASK {task_id}] Starting detect_chords function")
+    
     if not lazy_import_audio_deps():
         raise RuntimeError("Audio processing dependencies not available. Cannot perform chord detection.")
         
     try:
         import time
+        print(f"[TASK {task_id}] Importing madmom modules...")
         from madmom.audio.chroma import DeepChromaProcessor
         from madmom.features.chords import DeepChromaChordRecognitionProcessor
+        print(f"[TASK {task_id}] Madmom modules imported successfully")
         
         # Get audio duration for progress estimation
         y, sr = librosa.load(audio_file)
@@ -387,23 +391,35 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
         
         # Initialize madmom chord detection with high sensitivity settings
         # Configure for rapid chord change detection
-        chroma_processor = DeepChromaProcessor(
-            sample_rate=44100,  # Higher sample rate for better resolution
-            hop_size=512,       # Smaller hop size for higher temporal resolution
-            num_octaves=7,      # More octaves for better frequency coverage
-            num_classes=12,     # Full chroma resolution
-            fmin=27.5,          # Lower frequency bound (A0)
-            fmax=3520.0,        # Higher frequency bound (A7)
-            unique_filters=True  # Use unique filters for better accuracy
-        )
+        print(f"[TASK {task_id}] Initializing DeepChromaProcessor...")
+        try:
+            chroma_processor = DeepChromaProcessor(
+                sample_rate=44100,  # Higher sample rate for better resolution
+                hop_size=512,       # Smaller hop size for higher temporal resolution
+                num_octaves=7,      # More octaves for better frequency coverage
+                num_classes=12,     # Full chroma resolution
+                fmin=27.5,          # Lower frequency bound (A0)
+                fmax=3520.0,        # Higher frequency bound (A7)
+                unique_filters=True  # Use unique filters for better accuracy
+            )
+            print(f"[TASK {task_id}] DeepChromaProcessor initialized successfully")
+        except Exception as e:
+            print(f"[TASK {task_id}] ERROR initializing DeepChromaProcessor: {e}")
+            raise RuntimeError(f"Failed to initialize DeepChromaProcessor: {e}")
         
-        chord_processor = DeepChromaChordRecognitionProcessor(
-            sample_rate=44100,  # Match chroma processor
-            hop_size=512,       # Match chroma processor
-            num_classes=25,     # Include more chord types
-            unique_filters=True, # Use unique filters
-            fps=50              # Higher frame rate for temporal resolution
-        )
+        print(f"[TASK {task_id}] Initializing DeepChromaChordRecognitionProcessor...")
+        try:
+            chord_processor = DeepChromaChordRecognitionProcessor(
+                sample_rate=44100,  # Match chroma processor
+                hop_size=512,       # Match chroma processor
+                num_classes=25,     # Include more chord types
+                unique_filters=True, # Use unique filters
+                fps=50              # Higher frame rate for temporal resolution
+            )
+            print(f"[TASK {task_id}] DeepChromaChordRecognitionProcessor initialized successfully")
+        except Exception as e:
+            print(f"[TASK {task_id}] ERROR initializing DeepChromaChordRecognitionProcessor: {e}")
+            raise RuntimeError(f"Failed to initialize DeepChromaChordRecognitionProcessor: {e}")
         
         # Start timing for progress estimation
         start_time = time.time()
@@ -415,7 +431,13 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
             print(f"[TASK {task_id}] Progress: 40% - Starting chroma extraction")
         
         # Process the audio file - chroma extraction
-        chroma = chroma_processor(audio_file)
+        print(f"[TASK {task_id}] Starting chroma extraction...")
+        try:
+            chroma = chroma_processor(audio_file)
+            print(f"[TASK {task_id}] Chroma extraction completed successfully")
+        except Exception as e:
+            print(f"[TASK {task_id}] ERROR during chroma extraction: {e}")
+            raise RuntimeError(f"Chroma extraction failed: {e}")
         
         # Update progress: Chroma extraction complete, starting chord recognition (45-50%)
         if task_id and task_id in tasks:
@@ -424,7 +446,13 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
             print(f"[TASK {task_id}] Progress: 45% - Chroma extraction complete, starting chord recognition")
         
         # Process chords - this is the most time-consuming part
-        chords = chord_processor(chroma)
+        print(f"[TASK {task_id}] Starting chord recognition...")
+        try:
+            chords = chord_processor(chroma)
+            print(f"[TASK {task_id}] Chord recognition completed successfully")
+        except Exception as e:
+            print(f"[TASK {task_id}] ERROR during chord recognition: {e}")
+            raise RuntimeError(f"Chord recognition failed: {e}")
         
         # Calculate elapsed time and estimate remaining time
         elapsed_time = time.time() - start_time
@@ -1047,6 +1075,8 @@ def detect_chords_fallback(audio_file, chord_types=None):
         return chords_with_timing
     except Exception as e:
         print(f"Chord detection error: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 def separate_vocals_demucs(audio_path, output_dir, task_id=None):
