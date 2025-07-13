@@ -16,7 +16,7 @@ RUN pip install --upgrade pip wheel && pip install numpy==1.26.4 scipy==1.16.0 C
 
 # Copy and install the rest of the requirements
 COPY requirements.txt .
-RUN pip install --no-deps -r requirements.txt
+RUN pip install -r requirements.txt
 
 # Copy project files
 COPY . .
@@ -27,5 +27,5 @@ ENV PORT=8080
 # Expose the port
 EXPOSE 8080
 
-# Run the simple Flask app with Gunicorn for testing
-CMD gunicorn -b 0.0.0.0:$PORT app_simple:app 
+# Run the main Flask app with Gunicorn
+CMD gunicorn -b 0.0.0.0:$PORT app:app 
