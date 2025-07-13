@@ -1106,6 +1106,13 @@ def separate_vocals_demucs(audio_path, output_dir, task_id=None):
         log_debug(task_id, f"Running Demucs command: {' '.join(cmd)}")
         print(f"Running Demucs command: {' '.join(cmd)}")
         
+        # Test if the command can be parsed by Demucs
+        try:
+            test_result = subprocess.run(['demucs', '--help'], capture_output=True, text=True, timeout=5)
+            log_debug(task_id, f"Demucs help test successful: {test_result.returncode}")
+        except Exception as e:
+            log_debug(task_id, f"Demucs help test failed: {e}")
+        
         # Update task status if task_id is provided
         if task_id and task_id in tasks:
             tasks[task_id]['step'] = 'Splitting vocal & instrumental'
@@ -1127,13 +1134,35 @@ def separate_vocals_demucs(audio_path, output_dir, task_id=None):
             # Read output in real-time
             log_debug(task_id, "Starting to read Demucs output...")
             iteration_count = 0
+            last_output_time = time.time()
+            
+            start_time = time.time()
             while True:
                 iteration_count += 1
-                if iteration_count % 100 == 0:  # Log every 100 iterations to show we're still alive
-                    log_debug(task_id, f"Demucs output reading iteration: {iteration_count}")
+                current_time = time.time()
                 
-                stdout_line = process.stdout.readline()
-                stderr_line = process.stderr.readline()
+                # Check for timeout (5 minutes max for the reading loop)
+                if current_time - start_time > 300:
+                    log_debug(task_id, f"Demucs reading loop timed out after 5 minutes")
+                    process.terminate()
+                    raise subprocess.TimeoutExpired(cmd, 300)
+                
+                # Log progress every 10 seconds to show we're still alive
+                if current_time - last_output_time > 10:
+                    log_debug(task_id, f"Demucs still running - iteration {iteration_count}, process alive: {process.poll() is None}")
+                    last_output_time = current_time
+                
+                # Use select to check if there's data available (non-blocking)
+                import select
+                ready_to_read, _, _ = select.select([process.stdout, process.stderr], [], [], 1.0)
+                
+                stdout_line = ""
+                stderr_line = ""
+                
+                if process.stdout in ready_to_read:
+                    stdout_line = process.stdout.readline()
+                if process.stderr in ready_to_read:
+                    stderr_line = process.stderr.readline()
                 
                 if stdout_line:
                     stdout_lines.append(stdout_line.strip())
