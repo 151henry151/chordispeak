@@ -1154,14 +1154,25 @@ def separate_vocals_demucs(audio_path, output_dir, task_id=None):
                                 tasks[task_id]['step'] = 'Splitting vocal & instrumental'
                                 print(f"[TASK {task_id}] Demucs progress (stderr): {demucs_percentage}% -> Overall: {overall_progress}%")
                     
-                    # Check if process has finished
-                    if process.poll() is not None:
-                        break
+                                    # Check if process has finished
+                if process.poll() is not None:
+                    log_debug(task_id, f"Demucs process finished with return code: {process.returncode}")
+                    # Read any remaining output
+                    remaining_stdout = process.stdout.read()
+                    remaining_stderr = process.stderr.read()
+                    if remaining_stdout:
+                        log_debug(task_id, f"Remaining stdout: {remaining_stdout}")
+                    if remaining_stderr:
+                        log_debug(task_id, f"Remaining stderr: {remaining_stderr}")
+                    break
             
             # Wait for process to complete
+            log_debug(task_id, "Waiting for Demucs process to complete...")
             result = process.wait(timeout=900)
+            log_debug(task_id, f"Demucs process completed with return code: {result}")
             
             if result != 0:
+                log_debug(task_id, f"Demucs command failed with return code {result}")
                 print(f"Demucs command failed with return code {result}")
                 return None, None
                 
@@ -1177,6 +1188,8 @@ def separate_vocals_demucs(audio_path, output_dir, task_id=None):
             if task_id and task_id in tasks:
                 tasks[task_id]['step'] = f'Demucs error: {str(e)}'
             return None, None
+        finally:
+            log_debug(task_id, "Demucs subprocess handling completed")
             
         demucs_output = os.path.join(output_dir, 'htdemucs')
         log_debug(task_id, f"Looking for demucs output in: {demucs_output}")
