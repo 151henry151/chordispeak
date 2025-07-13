@@ -148,6 +148,45 @@
             text-align: center;
         }
 
+        /* Modal overlay */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(5px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .modal-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal-content {
+            background: rgba(255, 255, 255, 0.98);
+            border-radius: 20px;
+            padding: 2.5rem;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            max-width: 500px;
+            width: 90%;
+            transform: scale(0.9);
+            transition: transform 0.3s ease;
+        }
+
+        .modal-overlay.show .modal-content {
+            transform: scale(1);
+        }
+
         .progress-bar {
             background: #e2e8f0;
             border-radius: 10px;
@@ -201,6 +240,40 @@
         .status-processing { background: #fef5e7; color: #d69e2e; }
         .status-completed { background: #c6f6d5; color: #38a169; }
         .status-error { background: #fed7d7; color: #c53030; }
+
+        .patience-note {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 1.5rem;
+            font-style: italic;
+        }
+
+        .modal-actions {
+            margin-top: 1.5rem;
+        }
+
+        .cancel-button {
+            background: #e53e3e;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .cancel-button:hover {
+            background: #c53030;
+            transform: translateY(-1px);
+        }
+
+        .cancel-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
 
         /* Action buttons */
         .action-buttons {
@@ -552,6 +625,74 @@
                 max-width: 300px;
             }
         }
+
+        /* Chord Progression Display Styles */
+        .chord-progression-section {
+            margin: 2rem 0;
+            padding: 1.5rem;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .chord-progression-section h3 {
+            color: #333;
+            margin-bottom: 1rem;
+            text-align: center;
+            font-size: 1.3rem;
+        }
+
+        .chord-progression-display {
+            background: #f8f9ff;
+            border-radius: 10px;
+            padding: 1.5rem;
+            font-family: 'Courier New', monospace;
+            font-size: 1.1rem;
+            line-height: 1.6;
+            color: #333;
+            word-wrap: break-word;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid rgba(102, 126, 234, 0.2);
+        }
+
+        .chord-progression-display .chord-block {
+            display: inline-block;
+            margin: 0.25rem;
+            font-weight: bold;
+            /* Removed background, color, border-radius, box-shadow for clean look */
+        }
+
+        .chord-progression-display .beat-dash {
+            display: inline-block;
+            margin: 0 0.1rem;
+            color: #666;
+            font-weight: normal;
+        }
+
+        .loading-chords {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+        }
+
+        .chord-progression-display::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .chord-progression-display::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+
+        .chord-progression-display::-webkit-scrollbar-thumb {
+            background: #667eea;
+            border-radius: 4px;
+        }
+
+        .chord-progression-display::-webkit-scrollbar-thumb:hover {
+            background: #5a6fd8;
+        }
     </style>
 </head>
 <body>
@@ -577,89 +718,7 @@
                 </div>
 
                 <!-- Chord Type Selection -->
-                <div class="chord-selection-container">
-                    <h3>🎼 Chord Types to Detect</h3>
-                    <p class="chord-selection-description">Select which chord types you want to detect. Major chords are always included.</p>
-                    
-                    <div class="chord-selection-buttons">
-                        <button type="button" class="selection-button" id="selectAllBtn">Select All</button>
-                        <button type="button" class="selection-button" id="clearAllBtn">Clear All</button>
-                    </div>
-                    
-                    <div class="chord-checkboxes">
-                        <div class="chord-checkbox-group">
-                            <label class="chord-checkbox">
-                                <input type="checkbox" id="minorChords" checked>
-                                <span class="checkmark"></span>
-                                <span class="chord-label">Minor Chords</span>
-                            </label>
-                            
-                            <label class="chord-checkbox">
-                                <input type="checkbox" id="seventhChords" checked>
-                                <span class="checkmark"></span>
-                                <span class="chord-label">Seventh Chords</span>
-                            </label>
-                            
-                            <label class="chord-checkbox">
-                                <input type="checkbox" id="minorSeventhChords" checked>
-                                <span class="checkmark"></span>
-                                <span class="chord-label">Minor Seventh Chords</span>
-                            </label>
-                            
-                            <label class="chord-checkbox">
-                                <input type="checkbox" id="majorSeventhChords" checked>
-                                <span class="checkmark"></span>
-                                <span class="chord-label">Major Seventh Chords</span>
-                            </label>
-                        </div>
-                        
-                        <div class="chord-checkbox-group">
-                            <label class="chord-checkbox">
-                                <input type="checkbox" id="diminishedChords">
-                                <span class="checkmark"></span>
-                                <span class="chord-label">Diminished Chords</span>
-                            </label>
-                            
-                            <label class="chord-checkbox">
-                                <input type="checkbox" id="augmentedChords">
-                                <span class="checkmark"></span>
-                                <span class="chord-label">Augmented Chords</span>
-                            </label>
-                            
-                            <label class="chord-checkbox">
-                                <input type="checkbox" id="suspendedChords">
-                                <span class="checkmark"></span>
-                                <span class="chord-label">Suspended Chords</span>
-                            </label>
-                            
-                            <label class="chord-checkbox">
-                                <input type="checkbox" id="powerChords">
-                                <span class="checkmark"></span>
-                                <span class="chord-label">Power Chords</span>
-                            </label>
-                        </div>
-                        
-                        <div class="chord-checkbox-group">
-                            <label class="chord-checkbox">
-                                <input type="checkbox" id="addNineChords">
-                                <span class="checkmark"></span>
-                                <span class="chord-label">Add9 Chords</span>
-                            </label>
-                            
-                            <label class="chord-checkbox">
-                                <input type="checkbox" id="sixthChords">
-                                <span class="checkmark"></span>
-                                <span class="chord-label">Sixth Chords</span>
-                            </label>
-                            
-                            <label class="chord-checkbox">
-                                <input type="checkbox" id="minorSixthChords">
-                                <span class="checkmark"></span>
-                                <span class="chord-label">Minor Sixth Chords</span>
-                            </label>
-                        </div>
-                    </div>
-                </div>
+                <div class="chord-selection-container" style="display:none;"></div>
 
                 <div class="action-buttons">
                     <button class="process-button" id="processBtn" disabled>
@@ -674,18 +733,24 @@
             <!-- Error Message -->
             <div class="error-message" id="errorContainer" style="display: none;"></div>
 
-            <!-- Progress Section -->
-            <div class="progress-container" id="progressContainer" style="display: none;">
-                <h2>Processing</h2>
-                <div class="progress-details">
-                    <div class="progress-text" id="progressText">Initializing...</div>
-                    <div class="progress-percentage" id="progressPercentage">0%</div>
-                    <div class="progress-status" id="progressStatus">Starting...</div>
+            <!-- Progress Modal -->
+            <div class="modal-overlay" id="progressModal">
+                <div class="modal-content">
+                    <h2>Processing</h2>
+                    <p class="patience-note">⏱️ This may take a few minutes, please be patient</p>
+                    <div class="progress-details">
+                        <div class="progress-text" id="progressText">Initializing...</div>
+                        <div class="progress-percentage" id="progressPercentage">0%</div>
+                        <div class="progress-status" id="progressStatus">Starting...</div>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="status-badge" id="statusBadge">Starting</div>
+                    <div class="modal-actions">
+                        <button class="cancel-button" id="cancelBtn">❌ Cancel</button>
+                    </div>
                 </div>
-                <div class="progress-bar">
-                    <div class="progress-fill" id="progressFill"></div>
-                </div>
-                <div class="status-badge" id="statusBadge">Starting</div>
             </div>
 
             <!-- Results Section -->
@@ -697,6 +762,12 @@
                 </div>
                 <div class="audio-player-container">
                     <audio controls class="audio-player" id="audioPlayer"></audio>
+                </div>
+                <div class="chord-progression-section">
+                    <h3>🎵 Detected Chord Progression</h3>
+                    <div class="chord-progression-display" id="chordProgression">
+                        <p class="loading-chords">Loading chord progression...</p>
+                    </div>
                 </div>
                 <div class="download-section">
                     <div class="download-info">
@@ -730,7 +801,7 @@
         const processBtn = document.getElementById('processBtn');
         const resetBtn = document.getElementById('resetBtn');
         const errorContainer = document.getElementById('errorContainer');
-        const progressContainer = document.getElementById('progressContainer');
+        const progressModal = document.getElementById('progressModal');
         const progressText = document.getElementById('progressText');
         const progressPercentage = document.getElementById('progressPercentage');
         const progressFill = document.getElementById('progressFill');
@@ -739,6 +810,7 @@
         const resultsContainer = document.getElementById('resultsContainer');
         const audioPlayer = document.getElementById('audioPlayer');
         const downloadBtn = document.getElementById('downloadBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
 
         // File upload handling
         fileInput.addEventListener('change', handleFileUpload);
@@ -788,6 +860,9 @@
         // Process button handling
         processBtn.addEventListener('click', handleProcessAudio);
 
+        // Cancel button handling
+        cancelBtn.addEventListener('click', handleCancelTask);
+
         async function handleProcessAudio() {
             const file = fileInput.files[0];
             if (!file) {
@@ -805,22 +880,7 @@
                 const formData = new FormData();
                 formData.append('file', file);
 
-                // Collect chord type selections
-                const chordTypes = {
-                    minor: document.getElementById('minorChords').checked,
-                    seventh: document.getElementById('seventhChords').checked,
-                    minor_seventh: document.getElementById('minorSeventhChords').checked,
-                    major_seventh: document.getElementById('majorSeventhChords').checked,
-                    diminished: document.getElementById('diminishedChords').checked,
-                    augmented: document.getElementById('augmentedChords').checked,
-                    suspended: document.getElementById('suspendedChords').checked,
-                    power: document.getElementById('powerChords').checked,
-                    add_nine: document.getElementById('addNineChords').checked,
-                    sixth: document.getElementById('sixthChords').checked,
-                    minor_sixth: document.getElementById('minorSixthChords').checked
-                };
-
-                formData.append('chord_types', JSON.stringify(chordTypes));
+                // Remove chord type selections from formData
 
                 const response = await fetch('/upload', {
                     method: 'POST',
@@ -845,8 +905,38 @@
             }
         }
 
+        async function handleCancelTask() {
+            if (!currentTaskId || !isProcessing) return;
+
+            try {
+                cancelBtn.disabled = true;
+                cancelBtn.textContent = 'Cancelling...';
+
+                const response = await fetch(`/cancel/${currentTaskId}`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    isProcessing = false;
+                    progressModal.classList.remove('show');
+                    showError('Processing cancelled by user');
+                    resetProcessing();
+                } else {
+                    const errorData = await response.json().catch(() => ({}));
+                    showError(errorData.message || 'Failed to cancel task');
+                    cancelBtn.disabled = false;
+                    cancelBtn.textContent = '❌ Cancel';
+                }
+            } catch (error) {
+                console.error('Error cancelling task:', error);
+                showError('Failed to cancel task');
+                cancelBtn.disabled = false;
+                cancelBtn.textContent = '❌ Cancel';
+            }
+        }
+
         function showProgress() {
-            progressContainer.style.display = 'block';
+            progressModal.classList.add('show');
             resultsContainer.style.display = 'none';
             updateProgress(0, 'Initializing...', 'Starting');
         }
@@ -870,6 +960,9 @@
                 if (response.ok) {
                     const status = await response.json();
                     
+                    // Debug: log the status data
+                    console.log('Status update:', status);
+                    
                     let progress = 0;
                     let text = 'Processing...';
                     let statusText = 'Processing';
@@ -879,7 +972,8 @@
                             // Map backend step names to user-friendly messages
                             const stepMessages = {
                                 'Preparing audio file': 'Preparing audio file...',
-                                'Splitting vocal & instrumental': 'Splitting vocal & instrumental...',
+                                'Splitting vocal & instrumental': 'Separating instrumental and vocal tracks...',
+                                'Running Demucs vocal separation...': 'Separating instrumental and vocal tracks...',
                                 'Extracting voice sample': 'Extracting voice sample...',
                                 'Analyzing chord pattern': 'Analyzing chord pattern...',
                                 'Synthesizing spoken chord overlay': 'Synthesizing spoken chord overlay...',
@@ -887,8 +981,36 @@
                                 'Complete': 'Processing complete!'
                             };
                             
-                            text = stepMessages[status.step] || 'Processing...';
-                            progress = getProgressForStep(status.step);
+                            // Check if this is a demucs progress message
+                            if (status.step && status.step.startsWith('Demucs:')) {
+                                text = 'Separating instrumental and vocal tracks...';
+                                // Map demucs percentage (0-100) to overall progress (10-25)
+                                if (status.demucs_percentage !== undefined) {
+                                    progress = Math.round(10 + (status.demucs_percentage * 0.15)); // 10% to 25%
+                                } else {
+                                    progress = 25; // Demucs step
+                                }
+                            } else if (status.step === 'Splitting vocal & instrumental') {
+                                text = 'Separating instrumental and vocal tracks...';
+                                // If we have demucs percentage, use it; otherwise use default progress
+                                if (status.demucs_percentage !== undefined) {
+                                    progress = Math.round(10 + (status.demucs_percentage * 0.15)); // 10% to 25%
+                                    console.log(`Demucs progress: ${status.demucs_percentage}% -> ${progress}%`);
+                                } else {
+                                    progress = 25; // Default demucs step progress
+                                }
+                            } else if (status.step === 'Running Demucs vocal separation...') {
+                                text = 'Separating instrumental and vocal tracks...';
+                                // If we have demucs percentage, use it; otherwise use default progress
+                                if (status.demucs_percentage !== undefined) {
+                                    progress = Math.round(10 + (status.demucs_percentage * 0.15)); // 10% to 25%
+                                } else {
+                                    progress = 25; // Default demucs step progress
+                                }
+                            } else {
+                                text = stepMessages[status.step] || 'Processing...';
+                                progress = getProgressForStep(status.step);
+                            }
                             statusText = 'Processing';
                             break;
                         case 'completed':
@@ -922,6 +1044,7 @@
             const stepProgress = {
                 'Preparing audio file': 10,
                 'Splitting vocal & instrumental': 25,
+                'Running Demucs vocal separation...': 25,
                 'Extracting voice sample': 35,
                 'Analyzing chord pattern': 50,
                 'Synthesizing spoken chord overlay': 75,
@@ -932,7 +1055,7 @@
         }
 
         function showResults() {
-            progressContainer.style.display = 'none';
+            progressModal.classList.remove('show');
             resultsContainer.style.display = 'block';
             
             // Set up audio player
@@ -947,6 +1070,112 @@
                 link.click();
                 document.body.removeChild(link);
             };
+            
+            // Load and display chord progression
+            loadChordProgression();
+        }
+
+        async function loadChordProgression() {
+            try {
+                const response = await fetch(`/chords/${currentTaskId}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    displayChordProgression(data.chords);
+                } else {
+                    console.error('Failed to load chord data');
+                    document.getElementById('chordProgression').innerHTML = '<p class="loading-chords">Failed to load chord progression</p>';
+                }
+            } catch (error) {
+                console.error('Error loading chord progression:', error);
+                document.getElementById('chordProgression').innerHTML = '<p class="loading-chords">Failed to load chord progression</p>';
+            }
+        }
+
+        function displayChordProgression(chords) {
+            const container = document.getElementById('chordProgression');
+            
+            if (!chords || chords.length === 0) {
+                container.innerHTML = '<p class="loading-chords">No chords detected</p>';
+                return;
+            }
+
+            // Group chords by time intervals (assuming 1 second = 1 beat for simplicity)
+            const groupedChords = groupChordsByTime(chords);
+            
+            let progressionHtml = '';
+            let measuresInLine = 0;
+            const measuresPerLine = 4;
+            
+            groupedChords.forEach((group, index) => {
+                const chordName = group.chord;
+                const duration = group.duration;
+                
+                // Create chord block with appropriate number of beats
+                progressionHtml += `<span class="chord-block">[ ${chordName}`;
+                
+                // Add dashes for beats (1 dash per 0.5 seconds)
+                const beats = Math.max(1, Math.round(duration / 0.5));
+                for (let i = 1; i < beats; i++) {
+                    progressionHtml += ` <span class="beat-dash">-</span>`;
+                }
+                
+                progressionHtml += ` ]`;
+                
+                measuresInLine++;
+                
+                // Add line break after every 4 measures
+                if (measuresInLine >= measuresPerLine && index < groupedChords.length - 1) {
+                    progressionHtml += '<br>';
+                    measuresInLine = 0;
+                }
+            });
+            
+            container.innerHTML = progressionHtml;
+        }
+
+        function groupChordsByTime(chords) {
+            const grouped = [];
+            let currentChord = null;
+            let currentStartTime = 0;
+            
+            chords.forEach((chordData, index) => {
+                const chordName = chordData.chord;
+                const time = chordData.time;
+                
+                if (currentChord === null) {
+                    // First chord
+                    currentChord = chordName;
+                    currentStartTime = time;
+                } else if (chordName !== currentChord) {
+                    // Chord changed, save the previous group
+                    const duration = time - currentStartTime;
+                    grouped.push({
+                        chord: currentChord,
+                        duration: duration,
+                        startTime: currentStartTime,
+                        endTime: time
+                    });
+                    
+                    // Start new group
+                    currentChord = chordName;
+                    currentStartTime = time;
+                }
+                // If same chord, continue the current group
+            });
+            
+            // Add the last group
+            if (currentChord !== null) {
+                const lastChord = chords[chords.length - 1];
+                const duration = lastChord.time - currentStartTime + 1; // Add 1 second for the last chord
+                grouped.push({
+                    chord: currentChord,
+                    duration: duration,
+                    startTime: currentStartTime,
+                    endTime: lastChord.time + 1
+                });
+            }
+            
+            return grouped;
         }
 
         function resetProcessing() {
@@ -954,7 +1183,9 @@
             currentTaskId = null;
             processBtn.disabled = false;
             fileInput.disabled = false;
-            progressContainer.style.display = 'none';
+            cancelBtn.disabled = false;
+            cancelBtn.textContent = '❌ Cancel';
+            progressModal.classList.remove('show');
         }
 
         // Reset button handling
@@ -963,7 +1194,7 @@
         function handleReset() {
             resetFileInput();
             hideError();
-            progressContainer.style.display = 'none';
+            progressModal.classList.remove('show');
             resultsContainer.style.display = 'none';
             audioPlayer.pause();
             audioPlayer.currentTime = 0;
@@ -979,23 +1210,7 @@
             errorContainer.style.display = 'none';
         }
 
-        // Chord selection buttons
-        const selectAllBtn = document.getElementById('selectAllBtn');
-        const clearAllBtn = document.getElementById('clearAllBtn');
-
-        selectAllBtn.addEventListener('click', function() {
-            const checkboxes = document.querySelectorAll('.chord-checkbox input[type="checkbox"]');
-            checkboxes.forEach(checkbox => {
-                checkbox.checked = true;
-            });
-        });
-
-        clearAllBtn.addEventListener('click', function() {
-            const checkboxes = document.querySelectorAll('.chord-checkbox input[type="checkbox"]');
-            checkboxes.forEach(checkbox => {
-                checkbox.checked = false;
-            });
-        });
+        // Remove chord selection buttons and related JS
 
         // Initialize
     </script>

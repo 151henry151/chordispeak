@@ -19,6 +19,7 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import os
 import uuid
 import json
+import re
 from flask import Flask, request, jsonify, send_file, render_template_string
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
@@ -31,6 +32,18 @@ import shutil
 from threading import Thread
 import time
 from scipy.io.wavfile import write as write_wav
+
+# Fix for madmom Python 3.11 compatibility issue
+import collections
+if not hasattr(collections, 'MutableSequence'):
+    from collections.abc import MutableSequence
+    collections.MutableSequence = MutableSequence
+
+# Fix for madmom numpy compatibility issue
+if not hasattr(np, 'float'):
+    np.float = float
+if not hasattr(np, 'int'):
+    np.int = int
 
 def get_version():
     """Read version from VERSION file"""
@@ -59,6 +72,10 @@ UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'mp3', 'wav', 'flac', 'm4a'}
 MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB max file size
 
+# Pronunciation strategy configuration
+# Options: 'ipa', 'dots', 'words', 'nato', 'simple', 'spelled'
+PRONUNCIATION_STRATEGY = 'dots'  # Try dots strategy for clearer letter pronunciation
+
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
 
@@ -71,60 +88,138 @@ tasks = {}
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-def chord_to_speech(chord):
-    """Convert chord notation to phonetic speech"""
-    chord_map = {
-        'C': 'SEE', 'C#': 'SEE SHARP', 'Db': 'DEE FLAT',
-        'D': 'DEE', 'D#': 'DEE SHARP', 'Eb': 'EE FLAT',
-        'E': 'EE', 'F': 'EFF', 'F#': 'EFF SHARP', 'Gb': 'GEE FLAT',
-        'G': 'GEE', 'G#': 'GEE SHARP', 'Ab': 'AY FLAT',
-        'A': 'AYE', 'A#': 'AYE SHARP', 'Bb': 'BEE FLAT',
-        'B': 'BEE'
+def chord_to_ipa_phonemes(chord):
+    """Convert chord notation to phonetic spellings for precise pronunciation"""
+    # Strategy 1: IPA Phonemes (most precise)
+    letter_phonemes_ipa = {
+        'A': 'ˈeɪ',  # IPA for "A"
+        'B': 'ˈbiː',  # IPA for "B"
+        'C': 'ˈsiː',  # IPA for "C"
+        'D': 'ˈdiː',  # IPA for "D"
+        'E': 'ˈiː',   # IPA for "E"
+        'F': 'ˈɛf',   # IPA for "F"
+        'G': 'ˈdʒiː'  # IPA for "G"
     }
     
-    # Handle special chord types first
-    if chord.endswith('dim'):
-        base_chord = chord[:-3]  # Remove 'dim'
-        return chord_map.get(base_chord, base_chord) + ' DIMINISHED'
-    elif chord.endswith('aug'):
-        base_chord = chord[:-3]  # Remove 'aug'
-        return chord_map.get(base_chord, base_chord) + ' AUGMENTED'
-    elif chord.endswith('sus2'):
-        base_chord = chord[:-4]  # Remove 'sus2'
-        return chord_map.get(base_chord, base_chord) + ' SUSPENDED TWO'
-    elif chord.endswith('sus4'):
-        base_chord = chord[:-4]  # Remove 'sus4'
-        return chord_map.get(base_chord, base_chord) + ' SUSPENDED FOUR'
-    elif chord.endswith('sus'):
-        base_chord = chord[:-3]  # Remove 'sus'
-        return chord_map.get(base_chord, base_chord) + ' SUSPENDED'
-    elif chord.endswith('maj7'):
-        base_chord = chord[:-4]  # Remove 'maj7'
-        return chord_map.get(base_chord, base_chord) + ' MAJOR SEVENTH'
-    elif chord.endswith('m7'):
-        base_chord = chord[:-2]  # Remove 'm7'
-        return chord_map.get(base_chord, base_chord) + ' MINOR SEVENTH'
-    elif chord.endswith('7'):
-        base_chord = chord[:-1]  # Remove '7'
-        return chord_map.get(base_chord, base_chord) + ' SEVENTH'
-    elif chord.endswith('m6'):
-        base_chord = chord[:-2]  # Remove 'm6'
-        return chord_map.get(base_chord, base_chord) + ' MINOR SIXTH'
-    elif chord.endswith('6'):
-        base_chord = chord[:-1]  # Remove '6'
-        return chord_map.get(base_chord, base_chord) + ' SIXTH'
-    elif chord.endswith('add9'):
-        base_chord = chord[:-4]  # Remove 'add9'
-        return chord_map.get(base_chord, base_chord) + ' ADD NINE'
-    elif chord.endswith('5'):
-        base_chord = chord[:-1]  # Remove '5'
-        return chord_map.get(base_chord, base_chord) + ' POWER'
-    elif chord.endswith('m'):
-        base_chord = chord[:-1]  # Remove 'm'
-        return chord_map.get(base_chord, base_chord) + ' MINOR'
-    else:
-        # Major chord (no suffix)
-        return chord_map.get(chord, chord)
+    # Strategy 2: Spelling with dots (clear separation)
+    letter_phonemes_dots = {
+        'A': 'A.',
+        'B': 'B.',
+        'C': 'C.',
+        'D': 'D.',
+        'E': 'E.',
+        'F': 'F.',
+        'G': 'G.'
+    }
+    
+    # Strategy 3: Contextual words (natural pronunciation)
+    letter_phonemes_words = {
+        'A': 'A as in apple',
+        'B': 'B as in boy',
+        'C': 'C as in cat',
+        'D': 'D as in dog',
+        'E': 'E as in easy',
+        'F': 'F as in fun',
+        'G': 'G as in go'
+    }
+    
+    # Strategy 4: NATO phonetic alphabet
+    letter_phonemes_nato = {
+        'A': 'Alpha',
+        'B': 'Bravo',
+        'C': 'Charlie',
+        'D': 'Delta',
+        'E': 'Echo',
+        'F': 'Foxtrot',
+        'G': 'Golf'
+    }
+    
+    # Strategy 5: Simple spellings (current approach)
+    letter_phonemes_simple = {
+        'A': 'AY',
+        'B': 'BEE', 
+        'C': 'SEE',
+        'D': 'DEE',
+        'E': 'EE',
+        'F': 'EFF',
+        'G': 'GEE'
+    }
+    
+    # Choose strategy based on configuration
+    if PRONUNCIATION_STRATEGY == 'ipa':
+        letter_phonemes = letter_phonemes_ipa
+    elif PRONUNCIATION_STRATEGY == 'dots':
+        letter_phonemes = letter_phonemes_dots
+    elif PRONUNCIATION_STRATEGY == 'words':
+        letter_phonemes = letter_phonemes_words
+    elif PRONUNCIATION_STRATEGY == 'nato':
+        letter_phonemes = letter_phonemes_nato
+    elif PRONUNCIATION_STRATEGY == 'spelled':
+        letter_phonemes = {
+            'A': 'A Y', 'B': 'B E E', 'C': 'C E E', 'D': 'D E E', 
+            'E': 'E E', 'F': 'E F F', 'G': 'G E E'
+        }
+    else:  # Default to simple
+        letter_phonemes = letter_phonemes_simple
+    
+    # Modifier phonemes
+    modifiers = {
+        '#': 'SHARP',  # sharp
+        'b': 'FLAT',  # flat
+        'm': 'MINOR',  # minor
+        '7': 'SEVENTH',  # seventh
+        'maj7': 'MAJOR SEVENTH',  # major seventh
+        'm7': 'MINOR SEVENTH',  # minor seventh
+        'dim': 'DIMINISHED',  # diminished
+        'aug': 'AUGMENTED',  # augmented
+        'sus': 'SUSPENDED',  # suspended
+        'sus2': 'SUSPENDED TWO',  # suspended two
+        'sus4': 'SUSPENDED FOUR',  # suspended four
+        '6': 'SIXTH',  # sixth
+        'm6': 'MINOR SIXTH',  # minor sixth
+        'add9': 'ADD NINE',  # add nine
+        '5': 'POWER'  # power
+    }
+    
+    # Handle single letter chords
+    if len(chord) == 1 and chord in letter_phonemes:
+        return letter_phonemes[chord]
+    
+    # Handle chords with sharps/flats
+    if '#' in chord:
+        base = chord.split('#')[0]
+        if base in letter_phonemes:
+            return f"{letter_phonemes[base]} {modifiers['#']}"
+    elif 'b' in chord and len(chord) > 1:
+        base = chord.split('b')[0]
+        if base in letter_phonemes:
+            return f"{letter_phonemes[base]} {modifiers['b']}"
+    
+    # Handle special chord types
+    for suffix, phoneme in modifiers.items():
+        if chord.endswith(suffix):
+            base = chord[:-len(suffix)]
+            if base in letter_phonemes:
+                return f"{letter_phonemes[base]} {phoneme}"
+    
+    # Default: return the letter phoneme if available
+    if chord in letter_phonemes:
+        return letter_phonemes[chord]
+    
+    # Fallback to regular text
+    return chord
+
+def format_phonemes_for_tts(phoneme_text):
+    """Format phonetic text for TTS input using simple spellings"""
+    # For simple phonetic spellings, just return as-is
+    # The TTS should handle these better than IPA
+    return phoneme_text
+
+def format_chord_for_tts(chord_text):
+    """Format chord text for better TTS pronunciation using phonetic spellings"""
+    # For simple phonetic spellings, just return as-is
+    # The TTS should handle these better than IPA
+    return chord_text
 
 def extract_voice_sample(vocals_path, sample_duration=None):
     """Extract voice sample from separated vocals for voice cloning"""
@@ -140,7 +235,7 @@ def extract_voice_sample(vocals_path, sample_duration=None):
         return None, None
 
 def synthesize_chord_speech_coqui(text, voice_sample_path, output_path):
-    """Generate speech using Coqui XTTS v2 voice cloning"""
+    """Generate speech using Coqui XTTS v2 voice cloning with phoneme support"""
     if not TTS_AVAILABLE:
         raise RuntimeError("Coqui TTS not available. Please install Coqui TTS (XTTS v2).")
     try:
@@ -158,9 +253,15 @@ def synthesize_chord_speech_coqui(text, voice_sample_path, output_path):
         device = "cuda" if torch.cuda.is_available() else "cpu"
         tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
         
-        # Generate speech
+        # Convert chord to phonemes
+        phoneme_text = chord_to_ipa_phonemes(text)
+        formatted_phonemes = format_phonemes_for_tts(phoneme_text)
+        
+        print(f"Using phoneme approach: '{text}' -> '{formatted_phonemes}'")
+        
+        # Generate speech with phonemes
         tts.tts_to_file(
-            text=text,
+            text=formatted_phonemes,
             speaker_wav=voice_sample_path,
             language="en",
             file_path=output_path
@@ -181,13 +282,291 @@ def synthesize_chord_speech(text, voice_sample_path, output_path):
         raise RuntimeError("Voice sample for cloning not found. Cannot synthesize without a reference voice.")
     return synthesize_chord_speech_coqui(text, voice_sample_path, output_path)
 
-def detect_chords(audio_file, chord_types=None):
-    """Detect chords from audio file using librosa with improved timing"""
+def detect_chords(audio_file, chord_types=None, task_id=None):
+    """Detect chords from audio file using madmom for accurate chord recognition with progress tracking"""
+    try:
+        import time
+        from madmom.audio.chroma import DeepChromaProcessor
+        from madmom.features.chords import DeepChromaChordRecognitionProcessor
+        
+        # Get audio duration for progress estimation
+        y, sr = librosa.load(audio_file)
+        audio_duration = len(y) / sr
+        print(f"[TASK {task_id}] Audio duration: {audio_duration:.2f} seconds")
+        
+        # Initialize madmom chord detection with high sensitivity settings
+        # Configure for rapid chord change detection
+        chroma_processor = DeepChromaProcessor(
+            sample_rate=44100,  # Higher sample rate for better resolution
+            hop_size=512,       # Smaller hop size for higher temporal resolution
+            num_octaves=7,      # More octaves for better frequency coverage
+            num_classes=12,     # Full chroma resolution
+            fmin=27.5,          # Lower frequency bound (A0)
+            fmax=3520.0,        # Higher frequency bound (A7)
+            unique_filters=True  # Use unique filters for better accuracy
+        )
+        
+        chord_processor = DeepChromaChordRecognitionProcessor(
+            sample_rate=44100,  # Match chroma processor
+            hop_size=512,       # Match chroma processor
+            num_classes=25,     # Include more chord types
+            unique_filters=True, # Use unique filters
+            fps=50              # Higher frame rate for temporal resolution
+        )
+        
+        # Start timing for progress estimation
+        start_time = time.time()
+        
+        # Update progress: Starting chroma processing (40-45%)
+        if task_id and task_id in tasks:
+            tasks[task_id]['step'] = 'Analyzing chord pattern (chroma extraction)'
+            tasks[task_id]['progress'] = 40
+            print(f"[TASK {task_id}] Progress: 40% - Starting chroma extraction")
+        
+        # Process the audio file - chroma extraction
+        chroma = chroma_processor(audio_file)
+        
+        # Update progress: Chroma extraction complete, starting chord recognition (45-50%)
+        if task_id and task_id in tasks:
+            tasks[task_id]['step'] = 'Analyzing chord pattern (chord recognition)'
+            tasks[task_id]['progress'] = 45
+            print(f"[TASK {task_id}] Progress: 45% - Chroma extraction complete, starting chord recognition")
+        
+        # Process chords - this is the most time-consuming part
+        chords = chord_processor(chroma)
+        
+        # Calculate elapsed time and estimate remaining time
+        elapsed_time = time.time() - start_time
+        estimated_total_time = audio_duration * 0.1  # Rough estimate: 10% of audio duration for processing
+        if elapsed_time < estimated_total_time:
+            progress_ratio = elapsed_time / estimated_total_time
+            estimated_progress = 45 + int(progress_ratio * 5)  # 45-50% range
+            if task_id and task_id in tasks:
+                tasks[task_id]['progress'] = estimated_progress
+                print(f"[TASK {task_id}] Progress: {estimated_progress}% - Chord recognition in progress (estimated)")
+        
+        # Update progress: Raw chord detection complete (50-55%)
+        if task_id and task_id in tasks:
+            tasks[task_id]['step'] = 'Analyzing chord pattern (post-processing)'
+            tasks[task_id]['progress'] = 50
+            print(f"[TASK {task_id}] Progress: 50% - Raw chord detection complete, starting post-processing")
+        
+        # Debug: Print raw madmom output
+        print(f"Raw madmom detected {len(chords)} chord segments:")
+        for i, chord_data in enumerate(chords[:10]):  # Show first 10
+            print(f"  {i}: {chord_data} (length: {len(chord_data)})")
+        
+        # Check the format of the first chord data
+        if len(chords) > 0:
+            print(f"First chord data format: {type(chords[0])}, length: {len(chords[0])}")
+            print(f"First chord data: {chords[0]}")
+        
+        # Convert madmom output to our format
+        chords_with_timing = []
+        
+        # Improved filtering parameters - More sensitive for better detection
+        min_chord_duration = 0.2  # Even more reduced minimum duration to catch very short chord changes
+        min_confidence = 0.2  # Even more reduced confidence threshold to catch more detections
+        min_time_between_chords = 0.3  # Even more reduced minimum time between chord changes
+        
+        # Update progress: Starting chord filtering (55-60%)
+        if task_id and task_id in tasks:
+            tasks[task_id]['step'] = 'Analyzing chord pattern (filtering chords)'
+            tasks[task_id]['progress'] = 55
+            print(f"[TASK {task_id}] Progress: 55% - Starting chord filtering and validation")
+        
+        # First pass: collect all valid chord detections
+        valid_chords = []
+        filtered_out_count = 0
+        for i, chord_data in enumerate(chords):
+            try:
+                # Handle different possible madmom output formats
+                if len(chord_data) >= 4:
+                    # Format: [start_time, end_time, chord_label, confidence]
+                    start_time = float(chord_data[0])
+                    end_time = float(chord_data[1])
+                    chord_label = str(chord_data[2])
+                    confidence = float(chord_data[3])
+                elif len(chord_data) == 3:
+                    # Format: [start_time, end_time, chord_label] (no confidence)
+                    start_time = float(chord_data[0])
+                    end_time = float(chord_data[1])
+                    chord_label = str(chord_data[2])
+                    confidence = 1.0  # Default confidence
+                elif len(chord_data) == 2:
+                    # Format: [time, chord_label]
+                    start_time = float(chord_data[0])
+                    end_time = float(chord_data[0]) + 1.0  # Assume 1 second duration
+                    chord_label = str(chord_data[1])
+                    confidence = 1.0  # Default confidence
+                else:
+                    print(f"Unexpected chord data format: {chord_data}")
+                    continue
+                
+                # Skip 'N' (no chord) detections
+                if chord_label == 'N':
+                    filtered_out_count += 1
+                    continue
+                    
+                # Filter by confidence threshold
+                if confidence < min_confidence:
+                    print(f"Filtered out low confidence chord: {chord_label} at {start_time:.2f}s (confidence: {confidence:.3f} < {min_confidence})")
+                    filtered_out_count += 1
+                    continue
+                    
+                # Skip very short chord detections
+                chord_duration = end_time - start_time
+                if chord_duration < min_chord_duration:
+                    print(f"Filtered out short chord: {chord_label} at {start_time:.2f}s (duration: {chord_duration:.3f}s < {min_chord_duration}s)")
+                    filtered_out_count += 1
+                    continue
+                    
+                # Convert madmom chord labels to our format
+                chord_name = convert_madmom_chord(chord_label)
+                
+                print(f"Processing chord: {chord_label} -> {chord_name} at {start_time:.2f}-{end_time:.2f}s (confidence: {confidence:.3f})")
+                
+                valid_chords.append({
+                    'start_time': start_time,
+                    'end_time': end_time,
+                    'chord': chord_name,
+                    'confidence': confidence,
+                    'duration': chord_duration
+                })
+            except Exception as e:
+                print(f"Error processing chord data {chord_data}: {e}")
+                filtered_out_count += 1
+                continue
+        
+        print(f"After filtering: {len(valid_chords)} valid chord segments (filtered out {filtered_out_count})")
+        
+        # Update progress: Starting chord smoothing (60-65%)
+        if task_id and task_id in tasks:
+            tasks[task_id]['step'] = 'Analyzing chord pattern (smoothing chords)'
+            tasks[task_id]['progress'] = 60
+            print(f"[TASK {task_id}] Progress: 60% - Starting chord smoothing and timing optimization")
+        
+        # Second pass: apply smoothing and timing logic
+        if valid_chords:
+            # Sort by start time
+            valid_chords.sort(key=lambda x: x['start_time'])
+            
+            # Apply median filtering to reduce rapid switching - use smaller window for more sensitivity
+            window_size = 2  # Reduced from 3 to 2 for less aggressive smoothing
+            smoothed_chords = []
+            
+            for i in range(len(valid_chords)):
+                # Get window of chords around current position
+                start_idx = max(0, i - window_size // 2)
+                end_idx = min(len(valid_chords), i + window_size // 2 + 1)
+                window = valid_chords[start_idx:end_idx]
+                
+                # Find most common chord in window
+                chord_counts = {}
+                for chord_info in window:
+                    chord = chord_info['chord']
+                    chord_counts[chord] = chord_counts.get(chord, 0) + 1
+                
+                # Use the most common chord in the window
+                most_common_chord = max(chord_counts.items(), key=lambda x: x[1])[0]
+                
+                # Only add if it's different from the last added chord
+                if not smoothed_chords or most_common_chord != smoothed_chords[-1]['chord']:
+                    smoothed_chords.append({
+                        'time': valid_chords[i]['start_time'],
+                        'chord': most_common_chord,
+                        'speech': chord_to_ipa_phonemes(most_common_chord),
+                        'confidence': valid_chords[i]['confidence'],
+                        'duration': valid_chords[i]['duration']
+                    })
+            
+            # Final pass: ensure minimum time between chord changes
+            final_chords = []
+            for chord_info in smoothed_chords:
+                if not final_chords or (chord_info['time'] - final_chords[-1]['time']) >= min_time_between_chords:
+                    final_chords.append(chord_info)
+                else:
+                    print(f"Filtered out rapid chord change: {chord_info['chord']} at {chord_info['time']:.2f}s (too close to previous)")
+            
+            chords_with_timing = final_chords
+        
+        # Update progress: Chord detection complete (65%)
+        if task_id and task_id in tasks:
+            tasks[task_id]['step'] = 'Analyzing chord pattern (complete)'
+            tasks[task_id]['progress'] = 65
+            print(f"[TASK {task_id}] Progress: 65% - Chord detection and processing complete")
+        
+        print(f"Final result: {len(chords_with_timing)} chord changes")
+        for chord_info in chords_with_timing:
+            print(f"  {chord_info['chord']} at {chord_info['time']:.2f}s")
+        
+        # If madmom didn't detect enough chords, try to be more lenient
+        if len(chords_with_timing) < 2:  # Reduced from 3 to 2
+            print(f"Warning: Only detected {len(chords_with_timing)} chords, but continuing anyway")
+            if len(chords_with_timing) == 0:
+                raise RuntimeError(f"Madmom detected no chords. This could indicate an issue with the audio file or chord detection.")
+        
+        # Additional check: If no chords detected in first 10 seconds, try to force early detection
+        early_chords = [c for c in chords_with_timing if c['time'] < 10.0]
+        if len(early_chords) == 0 and len(chords_with_timing) > 0:
+            print(f"Warning: No chords detected in first 10 seconds. Earliest chord at {chords_with_timing[0]['time']:.2f}s")
+            # Try to add a chord at the beginning if we have any valid chords
+            if len(valid_chords) > 0:
+                # Find the earliest valid chord and add it at time 0
+                earliest_valid = min(valid_chords, key=lambda x: x['start_time'])
+                if earliest_valid['start_time'] > 5.0:  # If earliest is after 5s, add at 0
+                    print(f"Adding early chord at 0.0s: {earliest_valid['chord']}")
+                    chords_with_timing.insert(0, {
+                        'time': 0.0,
+                        'chord': earliest_valid['chord'],
+                        'speech': chord_to_ipa_phonemes(earliest_valid['chord']),
+                        'confidence': earliest_valid['confidence'],
+                        'duration': earliest_valid['duration']
+                    })
+        
+        return chords_with_timing
+    except Exception as e:
+        print(f"Madmom chord detection error: {e}")
+        # Re-raise the exception to fail properly
+        raise RuntimeError(f"Chord detection failed: {str(e)}")
+
+def convert_madmom_chord(madmom_label):
+    """Convert madmom chord labels to our chord format"""
+    # madmom uses labels like 'C:maj', 'C:min', 'C:7', etc.
+    if ':' not in madmom_label:
+        return madmom_label
+    
+    root, quality = madmom_label.split(':')
+    
+    # Convert quality to our format
+    if quality == 'maj':
+        return root
+    elif quality == 'min':
+        return root + 'm'
+    elif quality == '7':
+        return root + '7'
+    elif quality == 'maj7':
+        return root + 'maj7'
+    elif quality == 'min7':
+        return root + 'm7'
+    elif quality == 'dim':
+        return root + 'dim'
+    elif quality == 'aug':
+        return root + 'aug'
+    elif quality == 'sus2':
+        return root + 'sus2'
+    elif quality == 'sus4':
+        return root + 'sus4'
+    else:
+        return madmom_label  # Return as-is for unknown qualities
+
+def detect_chords_fallback(audio_file, chord_types=None):
+    """Fallback chord detection using librosa if madmom fails"""
     try:
         y, sr = librosa.load(audio_file)
         
         # Extract chroma features with higher resolution
-        chroma = librosa.feature.chroma_stft(y=y, sr=sr, hop_length=256)  # Smaller hop for better timing
+        chroma = librosa.feature.chroma_stft(y=y, sr=sr, hop_length=256)
         
         # Default chord type preferences if none provided
         if chord_types is None:
@@ -538,11 +917,11 @@ def detect_chords(audio_file, chord_types=None):
         # Combine onset and beat times, prioritizing onsets
         all_times = sorted(list(set(onset_times.tolist() + beat_times.tolist())))
         
-        # Filter times to avoid too frequent chord changes (minimum 0.5 seconds apart)
+        # Filter times to avoid too frequent chord changes (minimum 1.0 seconds apart for full speech)
         filtered_times = []
         last_time = -1
         for time in all_times:
-            if time - last_time >= 0.5:  # Minimum 0.5 seconds between chord changes
+            if time - last_time >= 1.0:  # Minimum 1.0 seconds between chord changes for full speech
                 filtered_times.append(time)
                 last_time = time
         
@@ -567,7 +946,7 @@ def detect_chords(audio_file, chord_types=None):
                 chords_with_timing.append({
                     'time': float(time),
                     'chord': best_chord,
-                    'speech': chord_to_speech(best_chord)
+                    'speech': chord_to_ipa_phonemes(best_chord)
                 })
         
         return chords_with_timing
@@ -575,7 +954,7 @@ def detect_chords(audio_file, chord_types=None):
         print(f"Chord detection error: {e}")
         return []
 
-def separate_vocals_demucs(audio_path, output_dir):
+def separate_vocals_demucs(audio_path, output_dir, task_id=None):
     """Separate vocals using Demucs (high-quality vocal separation).
     Outputs are saved as 'vocal_track.wav' (vocals only) and 'instrumental_track.wav' (instrumental only) in the output directory."""
     try:
@@ -583,33 +962,215 @@ def separate_vocals_demucs(audio_path, output_dir):
         import tempfile
         import glob
         import shutil
-        # Use Demucs command line interface
+        import signal
+        
+        # Use Demucs command line interface with timeout
         cmd = [
             'demucs',
             '--two-stems=vocals',  # Separate vocals from the rest
             '--out', output_dir,
+            '--mp3',  # Use MP3 output for faster processing
+            '--mp3-bitrate', '128',  # Lower bitrate for speed
             audio_path
         ]
         print(f"Running Demucs command: {' '.join(cmd)}")
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.returncode != 0:
-            print(f"Demucs command failed: {result.stderr}")
+        
+        # Update task status if task_id is provided
+        if task_id and task_id in tasks:
+            tasks[task_id]['step'] = 'Splitting vocal & instrumental'
+            tasks[task_id]['demucs_percentage'] = 0  # Initialize demucs percentage
+            tasks[task_id]['progress'] = 10  # Start at 10% for demucs step
+            print(f"[TASK {task_id}] Starting demucs with progress: 10%")
+        
+        # Run with timeout (15 minutes max) and show real-time output
+        try:
+            # Use Popen to get real-time output
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, 
+                                     text=True, bufsize=1, universal_newlines=True)
+            
+            stdout_lines = []
+            stderr_lines = []
+            
+            # Read output in real-time
+            while True:
+                stdout_line = process.stdout.readline()
+                stderr_line = process.stderr.readline()
+                
+                if stdout_line:
+                    stdout_lines.append(stdout_line.strip())
+                    print(f"[TASK {task_id}] Demucs stdout: {stdout_line.strip()}")
+                    
+                    # Update task status with progress if we detect progress info
+                    if task_id and task_id in tasks:
+                        # Try multiple patterns for progress detection
+                        progress_found = False
+                        
+                        # Pattern 1: "25%|██▎ | 5.85/187.2"
+                        match = re.search(r'(\d+)%', stdout_line)
+                        if match:
+                            demucs_percentage = int(match.group(1))
+                            progress_found = True
+                        
+                        # Pattern 2: "Processing: 25%" or "Progress: 25%"
+                        if not progress_found:
+                            match = re.search(r'(?:Processing|Progress):\s*(\d+)%', stdout_line, re.IGNORECASE)
+                            if match:
+                                demucs_percentage = int(match.group(1))
+                                progress_found = True
+                        
+                        # Pattern 3: "25/100" or "5.85/187.2" (fraction format)
+                        if not progress_found:
+                            match = re.search(r'(\d+(?:\.\d+)?)/(\d+(?:\.\d+)?)', stdout_line)
+                            if match:
+                                current = float(match.group(1))
+                                total = float(match.group(2))
+                                if total > 0:
+                                    demucs_percentage = int((current / total) * 100)
+                                    progress_found = True
+                        
+                        if progress_found:
+                            # Store demucs percentage in task for frontend
+                            tasks[task_id]['demucs_percentage'] = demucs_percentage
+                            # Map demucs progress (0-100) to overall progress (10-25) with proper linear scaling
+                            # Formula: overall = 10 + (demucs_percentage * 15 / 100)
+                            # This maps: 0%->10%, 25%->13.75%, 50%->17.5%, 75%->21.25%, 100%->25%
+                            overall_progress = 10 + int((demucs_percentage * 15) / 100)
+                            
+                            # Only update if new progress is higher than current
+                            current_progress = tasks[task_id].get('progress', 0)
+                            if overall_progress > current_progress:
+                                tasks[task_id]['progress'] = overall_progress
+                                tasks[task_id]['step'] = 'Splitting vocal & instrumental'
+                                print(f"[TASK {task_id}] Demucs progress: {demucs_percentage}% -> Overall: {overall_progress}%")
+                            else:
+                                # Even if no progress found, update step to show we're still working
+                                tasks[task_id]['step'] = 'Splitting vocal & instrumental'
+                                print(f"[TASK {task_id}] Demucs output (no progress): {stdout_line.strip()}")
+                    
+                if stderr_line:
+                    stderr_lines.append(stderr_line.strip())
+                    print(f"[TASK {task_id}] Demucs stderr: {stderr_line.strip()}")
+                    
+                    # Also check stderr for progress information
+                    if task_id and task_id in tasks:
+                        # Try multiple patterns for progress detection in stderr
+                        progress_found = False
+                        
+                        # Pattern 1: "25%|██▎ | 5.85/187.2"
+                        match = re.search(r'(\d+)%', stderr_line)
+                        if match:
+                            demucs_percentage = int(match.group(1))
+                            progress_found = True
+                        
+                        # Pattern 2: "Processing: 25%" or "Progress: 25%"
+                        if not progress_found:
+                            match = re.search(r'(?:Processing|Progress):\s*(\d+)%', stderr_line, re.IGNORECASE)
+                            if match:
+                                demucs_percentage = int(match.group(1))
+                                progress_found = True
+                        
+                        # Pattern 3: "25/100" or "5.85/187.2" (fraction format)
+                        if not progress_found:
+                            match = re.search(r'(\d+(?:\.\d+)?)/(\d+(?:\.\d+)?)', stderr_line)
+                            if match:
+                                current = float(match.group(1))
+                                total = float(match.group(2))
+                                if total > 0:
+                                    demucs_percentage = int((current / total) * 100)
+                                    progress_found = True
+                        
+                        if progress_found:
+                            # Store demucs percentage in task for frontend
+                            tasks[task_id]['demucs_percentage'] = demucs_percentage
+                            # Map demucs progress (0-100) to overall progress (10-25) with proper linear scaling
+                            # Formula: overall = 10 + (demucs_percentage * 15 / 100)
+                            # This maps: 0%->10%, 25%->13.75%, 50%->17.5%, 75%->21.25%, 100%->25%
+                            overall_progress = 10 + int((demucs_percentage * 15) / 100)
+                            
+                            # Only update if new progress is higher than current
+                            current_progress = tasks[task_id].get('progress', 0)
+                            if overall_progress > current_progress:
+                                tasks[task_id]['progress'] = overall_progress
+                                tasks[task_id]['step'] = 'Splitting vocal & instrumental'
+                                print(f"[TASK {task_id}] Demucs progress (stderr): {demucs_percentage}% -> Overall: {overall_progress}%")
+                    
+                    # Check if process has finished
+                    if process.poll() is not None:
+                        break
+            
+            # Wait for process to complete
+            result = process.wait(timeout=900)
+            
+            if result != 0:
+                print(f"Demucs command failed with return code {result}")
+                return None, None
+                
+        except subprocess.TimeoutExpired:
+            print("Demucs command timed out after 15 minutes")
+            if task_id and task_id in tasks:
+                tasks[task_id]['step'] = 'Demucs timed out after 15 minutes'
             return None, None
+        except Exception as e:
+            print(f"Demucs subprocess error: {e}")
+            if task_id and task_id in tasks:
+                tasks[task_id]['step'] = f'Demucs error: {str(e)}'
+            return None, None
+            
         demucs_output = os.path.join(output_dir, 'htdemucs')
+        print(f"Looking for demucs output in: {demucs_output}")
+        
         if not os.path.exists(demucs_output):
             print(f"Demucs output directory not found: {demucs_output}")
+            # List contents of output_dir to see what was created
+            if os.path.exists(output_dir):
+                print(f"Contents of {output_dir}: {os.listdir(output_dir)}")
             return None, None
-        vocals_files = glob.glob(os.path.join(demucs_output, '*', 'vocals.wav'))
-        no_vocals_files = glob.glob(os.path.join(demucs_output, '*', 'no_vocals.wav'))
+            
+        # List contents of demucs_output to see what's there
+        print(f"Contents of demucs output directory: {os.listdir(demucs_output)}")
+        
+        # Look for both .wav and .mp3 files
+        vocals_files = glob.glob(os.path.join(demucs_output, '*', 'vocals.*'))
+        no_vocals_files = glob.glob(os.path.join(demucs_output, '*', 'no_vocals.*'))
+        
+        print(f"Found vocals files: {vocals_files}")
+        print(f"Found no_vocals files: {no_vocals_files}")
+        
         if not vocals_files or not no_vocals_files:
-            print("Demucs output files not found")
+            print(f"Demucs output files not found. Vocals: {vocals_files}, No vocals: {no_vocals_files}")
+            # Try to find any files in the demucs output
+            all_files = []
+            for root, dirs, files in os.walk(demucs_output):
+                for file in files:
+                    all_files.append(os.path.join(root, file))
+            print(f"All files in demucs output: {all_files}")
             return None, None
+            
         # Copy to standardized names
         vocal_track_path = os.path.join(output_dir, 'vocal_track.wav')
         instrumental_track_path = os.path.join(output_dir, 'instrumental_track.wav')
-        shutil.copy2(vocals_files[0], vocal_track_path)
-        shutil.copy2(no_vocals_files[0], instrumental_track_path)
+        
+        # Convert to WAV if needed
+        vocals_source = vocals_files[0]
+        no_vocals_source = no_vocals_files[0]
+        
+        if vocals_source.endswith('.mp3'):
+            # Convert MP3 to WAV
+            audio = AudioSegment.from_mp3(vocals_source)
+            audio.export(vocal_track_path, format='wav')
+        else:
+            shutil.copy2(vocals_source, vocal_track_path)
+            
+        if no_vocals_source.endswith('.mp3'):
+            # Convert MP3 to WAV
+            audio = AudioSegment.from_mp3(no_vocals_source)
+            audio.export(instrumental_track_path, format='wav')
+        else:
+            shutil.copy2(no_vocals_source, instrumental_track_path)
+            
+        print(f"Vocal separation completed: {vocal_track_path}, {instrumental_track_path}")
         return vocal_track_path, instrumental_track_path
+        
     except Exception as e:
         print(f"Demucs vocal separation error: {e}")
         return None, None
@@ -619,121 +1180,196 @@ def separate_vocals_demucs(audio_path, output_dir):
 def process_audio_task(task_id, file_path):
     """Background task to process audio file"""
     try:
+        import time
+        start_time = time.time()
+        
+        print(f"\n=== [TASK {task_id}] STARTING PROCESSING ===")
+        print(f"[TASK {task_id}] Input file: {file_path}")
+        print(f"[TASK {task_id}] File size: {os.path.getsize(file_path)} bytes")
+        
         tasks[task_id]['status'] = 'processing'
         task_dir = os.path.join(UPLOAD_FOLDER, task_id)
         
         # Step 1: Convert to wav if needed
+        print(f"\n=== [TASK {task_id}] STEP 1: PREPARING AUDIO FILE ===")
         tasks[task_id]['step'] = 'Preparing audio file'
+        tasks[task_id]['progress'] = 5
+        print(f"[TASK {task_id}] Progress: 5% - Preparing audio file")
         
+        step1_start = time.time()
+        print(f"[TASK {task_id}] Loading audio with pydub...")
         audio = AudioSegment.from_file(file_path)
+        print(f"[TASK {task_id}] Audio loaded successfully. Duration: {len(audio)/1000:.2f} seconds")
+        
         wav_path = os.path.join(task_dir, 'input.wav')
+        print(f"[TASK {task_id}] Exporting to WAV: {wav_path}")
         audio.export(wav_path, format='wav')
+        step1_time = time.time() - step1_start
+        print(f"[TASK {task_id}] WAV export completed in {step1_time:.2f} seconds")
+        print(f"[TASK {task_id}] WAV file size: {os.path.getsize(wav_path)} bytes")
         
         # Step 2: Vocal separation using Demucs only
+        print(f"Step 2: Starting vocal separation for task {task_id}")
         tasks[task_id]['step'] = 'Splitting vocal & instrumental'
-        
-        # Use Demucs for vocal separation - no fallbacks
-        vocals_path, instrumental_path = separate_vocals_demucs(wav_path, task_dir)
-        
+        tasks[task_id]['progress'] = 10
+        print(f"[TASK {task_id}] Progress: 10% - Starting vocal separation")
+        vocals_path, instrumental_path = separate_vocals_demucs(wav_path, task_dir, task_id)
         if vocals_path is None or instrumental_path is None:
-            raise RuntimeError("Demucs vocal separation failed. Cannot proceed without proper vocal separation.")
+            error_msg = "Demucs vocal separation failed. Cannot proceed without proper vocal separation."
+            print(f"ERROR: {error_msg}")
+            raise RuntimeError(error_msg)
+        print(f"Vocal separation completed: {vocals_path}, {instrumental_path}")
         
         # Step 3: Extract voice sample from vocals for voice cloning
+        print(f"Step 3: Extracting voice sample for task {task_id}")
         tasks[task_id]['step'] = 'Extracting voice sample'
-        
+        tasks[task_id]['progress'] = 30
+        print(f"[TASK {task_id}] Progress: 30% - Extracting voice sample")
         voice_sample, voice_sr = extract_voice_sample(vocals_path)
         voice_sample_path = None
-        
         if voice_sample is not None:
             voice_sample_path = os.path.join(task_dir, 'voice_sample.wav')
             write_wav(voice_sample_path, voice_sr, voice_sample)
+            print(f"Voice sample extracted: {voice_sample_path}")
+        else:
+            print("WARNING: Voice sample extraction failed")
         
         # Step 4: Chord detection (using instrumental track)
+        print(f"\n=== [TASK {task_id}] STEP 4: CHORD DETECTION ===")
         tasks[task_id]['step'] = 'Analyzing chord pattern'
+        tasks[task_id]['progress'] = 40
+        print(f"[TASK {task_id}] Progress: 40% - Analyzing chord pattern")
         
-        # Get chord type preferences from task
-        chord_types = tasks[task_id].get('chord_types', None)
-        chords = detect_chords(instrumental_path, chord_types)
+        chord_start = time.time()
+        print(f"[TASK {task_id}] Starting chord detection with madmom...")
+        print(f"[TASK {task_id}] Instrumental file: {instrumental_path}")
+        print(f"[TASK {task_id}] Instrumental file size: {os.path.getsize(instrumental_path)} bytes")
+        
+        try:
+            # Use madmom's default detection with progress tracking
+            chords = detect_chords(instrumental_path, task_id=task_id)
+            chord_time = time.time() - chord_start
+            print(f"[TASK {task_id}] Chord detection completed in {chord_time:.2f} seconds")
+            print(f"[TASK {task_id}] Detected {len(chords)} chords")
+            tasks[task_id]['progress'] = 65
+            print(f"[TASK {task_id}] Progress: 65% - Chord detection completed")
+        except Exception as chord_error:
+            print(f"[TASK {task_id}] ERROR in chord detection: {chord_error}")
+            raise RuntimeError(f"Chord detection failed: {str(chord_error)}")
         
         # Save chord data
         chords_file = os.path.join(task_dir, 'chords.json')
         with open(chords_file, 'w') as f:
             json.dump(chords, f)
+        print(f"Chord data saved: {chords_file}")
         
         # Step 5: Voice synthesis using voice cloning
+        print(f"\n=== [TASK {task_id}] STEP 5: VOICE SYNTHESIS ===")
         tasks[task_id]['step'] = 'Synthesizing spoken chord overlay'
+        tasks[task_id]['progress'] = 70
+        print(f"[TASK {task_id}] Progress: 70% - Starting voice synthesis")
         
-        # Generate TTS for each unique chord
+        tts_start = time.time()
         unique_chords = list(set(chord_data['speech'] for chord_data in chords))
+        print(f"[TASK {task_id}] Unique chords to synthesize: {len(unique_chords)}")
+        print(f"[TASK {task_id}] Unique chords: {unique_chords}")
+        
         tts_cache = {}
         
-        for chord_speech in unique_chords:
+        # Update progress for each chord synthesis
+        for i, chord_speech in enumerate(unique_chords):
+            # Update progress for each chord (70-85%) with whole numbers only
+            # Simple mapping: 0->70%, 1->72%, 2->75%, 3->77%, 4->80%, 5->82%, 6->85%
+            if len(unique_chords) == 1:
+                chord_progress = 70
+            elif len(unique_chords) == 2:
+                chord_progress = 70 if i == 0 else 85
+            elif len(unique_chords) == 3:
+                chord_progress = 70 if i == 0 else (77 if i == 1 else 85)
+            elif len(unique_chords) == 4:
+                chord_progress = 70 if i == 0 else (75 if i == 1 else (80 if i == 2 else 85))
+            else:
+                # For 5+ chords, use simple increments
+                chord_progress = 70 + (i * 3)  # 70, 73, 76, 79, 82, 85
+                if chord_progress > 85:
+                    chord_progress = 85
+            
+            tasks[task_id]['progress'] = chord_progress
+            tasks[task_id]['step'] = f'Synthesizing chord {i+1}/{len(unique_chords)}'
+            print(f"[TASK {task_id}] Progress: {chord_progress}% - Synthesizing chord {i+1}/{len(unique_chords)}: {chord_speech}")
+            
             tts_output_path = os.path.join(task_dir, f'tts_{chord_speech.replace(" ", "_").replace("#", "sharp")}.wav')
             if not synthesize_chord_speech(chord_speech, voice_sample_path, tts_output_path):
-                raise RuntimeError(f"TTS synthesis failed for chord: {chord_speech}")
-            # Load the generated TTS audio
+                error_msg = f"TTS synthesis failed for chord: {chord_speech}"
+                print(f"ERROR: {error_msg}")
+                raise RuntimeError(error_msg)
             if os.path.exists(tts_output_path):
                 tts_cache[chord_speech] = AudioSegment.from_wav(tts_output_path)
+                print(f"Loaded TTS for '{chord_speech}': {len(tts_cache[chord_speech])}ms duration")
             else:
-                raise RuntimeError(f"TTS output file not created for chord: {chord_speech}")
+                error_msg = f"TTS output file not created for chord: {chord_speech}"
+                print(f"ERROR: {error_msg}")
+                raise RuntimeError(error_msg)
         
-        # Create chord audio track with proper timing
+        # Step 6: Creating chord audio track
+        print(f"Step 6: Creating chord audio track for task {task_id}")
+        tasks[task_id]['step'] = 'Creating chord audio track'
+        tasks[task_id]['progress'] = 85
+        print(f"[TASK {task_id}] Progress: 85% - Creating chord audio track")
         chord_audio_segments = []
-        
         for i, chord_data in enumerate(chords):
-            # Calculate precise timing
             if i == 0:
-                silence_duration = chord_data['time'] * 1000  # Convert to ms
+                silence_duration = chord_data['time'] * 1000
             else:
                 silence_duration = (chord_data['time'] - chords[i-1]['time']) * 1000
-            
-            # Ensure positive duration
             if silence_duration > 0:
                 chord_audio_segments.append(AudioSegment.silent(duration=int(silence_duration)))
-            
-            # Add synthesized speech with precise timing
+                print(f"Added {int(silence_duration)}ms silence before chord {i+1}")
             chord_speech = chord_data['speech']
             if chord_speech in tts_cache:
                 speech_audio = tts_cache[chord_speech]
-                # Limit speech duration to avoid overlap with next chord
-                max_duration = 800  # 0.8 seconds max to leave room for next chord
-                if len(speech_audio) > max_duration:
-                    speech_audio = speech_audio[:max_duration]
                 chord_audio_segments.append(speech_audio)
+                print(f"Added '{chord_speech}' at {chord_data['time']:.2f}s: {len(speech_audio)}ms duration")
             else:
-                # Fallback beep
                 beep = AudioSegment.sine(frequency=440, duration=200)
                 chord_audio_segments.append(beep)
-        
-        # Combine chord audio
+                print(f"Added fallback beep for '{chord_speech}' at {chord_data['time']:.2f}s")
         chord_track = sum(chord_audio_segments, AudioSegment.empty())
         
-        # Step 6: Mix chord vocals with instrumental track
+        # Step 7: Mixing final audio
+        print(f"Step 7: Mixing final audio for task {task_id}")
         tasks[task_id]['step'] = 'Overlaying spoken chords onto instrumental track'
-        
+        tasks[task_id]['progress'] = 90
+        print(f"[TASK {task_id}] Progress: 90% - Mixing final audio")
         instrumental_audio = AudioSegment.from_wav(instrumental_path)
-        
-        # Ensure chord track matches instrumental audio length
         if len(chord_track) < len(instrumental_audio):
             chord_track += AudioSegment.silent(duration=len(instrumental_audio) - len(chord_track))
         elif len(chord_track) > len(instrumental_audio):
             chord_track = chord_track[:len(instrumental_audio)]
-        
-        # Mix chord vocals with instrumental (not original audio)
-        final_audio = instrumental_audio.overlay(chord_track - 10)  # Reduce chord volume by 10dB
-        
-        # Export final result
+        final_audio = instrumental_audio.overlay(chord_track - 10)
         output_path = os.path.join(task_dir, 'final.mp3')
         final_audio.export(output_path, format='mp3')
         
+        # Complete
+        total_time = time.time() - start_time
         tasks[task_id]['status'] = 'completed'
         tasks[task_id]['step'] = 'Complete'
+        tasks[task_id]['progress'] = 100
         tasks[task_id]['output_file'] = output_path
+        print(f"\n=== [TASK {task_id}] PROCESSING COMPLETED ===")
+        print(f"[TASK {task_id}] Progress: 100% - Processing completed successfully")
+        print(f"[TASK {task_id}] Total processing time: {total_time:.2f} seconds ({total_time/60:.2f} minutes)")
+        print(f"[TASK {task_id}] Output file: {output_path}")
         
     except Exception as e:
+        print(f"\n=== [TASK {task_id}] PROCESSING ERROR ===")
+        print(f"[TASK {task_id}] ERROR: {e}")
+        import traceback
+        traceback.print_exc()
         tasks[task_id]['status'] = 'error'
         tasks[task_id]['error'] = str(e)
-        print(f"Processing error for task {task_id}: {e}")
+        tasks[task_id]['step'] = f'Error: {str(e)}'
+        print(f"[TASK {task_id}] Processing error for task {task_id}: {e}")
 
 @app.route('/')
 def index():
@@ -752,27 +1388,7 @@ def upload_file():
     if not allowed_file(file.filename):
         return jsonify({'error': 'Invalid file type'}), 400
     
-    # Get chord type selections (default to all enabled if not provided)
-    chord_types = {
-        'minor': True,
-        'seventh': True,
-        'minor_seventh': True,
-        'major_seventh': True,
-        'diminished': False,
-        'augmented': False,
-        'suspended': False,
-        'power': False,
-        'add_nine': False,
-        'sixth': False,
-        'minor_sixth': False
-    }
-    
-    if 'chord_types' in request.form:
-        try:
-            user_chord_types = json.loads(request.form['chord_types'])
-            chord_types.update(user_chord_types)
-        except (json.JSONDecodeError, TypeError):
-            pass  # Use defaults if parsing fails
+    # Remove chord type selections (always use madmom's default)
     
     # Generate unique task ID
     task_id = str(uuid.uuid4())
@@ -788,8 +1404,7 @@ def upload_file():
     tasks[task_id] = {
         'status': 'queued',
         'step': 'Uploaded',
-        'filename': filename,
-        'chord_types': chord_types
+        'filename': filename
     }
     
     # Start background processing
@@ -803,7 +1418,24 @@ def get_status(task_id):
     if task_id not in tasks:
         return jsonify({'error': 'Task not found'}), 404
     
+    # Don't log status requests to reduce terminal noise
     return jsonify(tasks[task_id])
+
+@app.route('/cancel/<task_id>', methods=['POST'])
+def cancel_task(task_id):
+    """Cancel a running task"""
+    if task_id not in tasks:
+        return jsonify({'error': 'Task not found'}), 404
+    
+    task = tasks[task_id]
+    if task['status'] not in ['processing', 'queued']:
+        return jsonify({'error': 'Task cannot be cancelled'}), 400
+    
+    # Mark task as cancelled
+    task['status'] = 'cancelled'
+    task['step'] = 'Cancelled by user'
+    
+    return jsonify({'status': 'cancelled', 'message': 'Task cancelled successfully'})
 
 @app.route('/download/<task_id>')
 def download_file(task_id):
@@ -815,6 +1447,28 @@ def download_file(task_id):
         return jsonify({'error': 'Task not completed'}), 400
     
     return send_file(task['output_file'], as_attachment=True, download_name='chord_vocals.mp3')
+
+@app.route('/chords/<task_id>')
+def get_chords(task_id):
+    """Get chord progression data for a completed task"""
+    if task_id not in tasks:
+        return jsonify({'error': 'Task not found'}), 404
+    
+    task = tasks[task_id]
+    if task['status'] != 'completed':
+        return jsonify({'error': 'Task not completed'}), 400
+    
+    # Load chord data from the saved JSON file
+    chords_file = os.path.join(UPLOAD_FOLDER, task_id, 'chords.json')
+    if not os.path.exists(chords_file):
+        return jsonify({'error': 'Chord data not found'}), 404
+    
+    try:
+        with open(chords_file, 'r') as f:
+            chords = json.load(f)
+        return jsonify({'chords': chords})
+    except Exception as e:
+        return jsonify({'error': f'Failed to load chord data: {str(e)}'}), 500
 
 @app.route('/health')
 def health_check():
@@ -1149,5 +1803,57 @@ def api_docs():
     """
     return docs_html
 
+@app.route('/debug/<task_id>')
+def debug_task(task_id):
+    """Debug endpoint to see task details"""
+    if task_id not in tasks:
+        return jsonify({'error': 'Task not found'}), 404
+    
+    task = tasks[task_id]
+    return jsonify({
+        'task_id': task_id,
+        'status': task.get('status', 'unknown'),
+        'step': task.get('step', 'unknown'),
+        'progress': task.get('progress', 0),
+        'demucs_percentage': task.get('demucs_percentage', 0),
+        'error': task.get('error', None),
+        'filename': task.get('filename', 'unknown'),
+        'output_file': task.get('output_file', None)
+    })
+
+def test_pronunciation_strategies():
+    """Test different pronunciation strategies for letter names"""
+    strategies = {
+        'IPA': {
+            'A': 'ˈeɪ', 'B': 'ˈbiː', 'C': 'ˈsiː', 'D': 'ˈdiː', 'E': 'ˈiː', 'F': 'ˈɛf', 'G': 'ˈdʒiː'
+        },
+        'Dots': {
+            'A': 'A dot', 'B': 'B dot', 'C': 'C dot', 'D': 'D dot', 'E': 'E dot', 'F': 'F dot', 'G': 'G dot'
+        },
+        'Words': {
+            'A': 'A as in apple', 'B': 'B as in boy', 'C': 'C as in cat', 'D': 'D as in dog', 
+            'E': 'E as in easy', 'F': 'F as in fun', 'G': 'G as in go'
+        },
+        'NATO': {
+            'A': 'Alpha', 'B': 'Bravo', 'C': 'Charlie', 'D': 'Delta', 'E': 'Echo', 'F': 'Foxtrot', 'G': 'Golf'
+        },
+        'Simple': {
+            'A': 'AY', 'B': 'BEE', 'C': 'SEE', 'D': 'DEE', 'E': 'EE', 'F': 'EFF', 'G': 'GEE'
+        }
+    }
+    
+    print("Testing pronunciation strategies:")
+    for strategy_name, letters in strategies.items():
+        print(f"\n{strategy_name}:")
+        for letter, pronunciation in letters.items():
+            print(f"  {letter} → {pronunciation}")
+    
+    return strategies
+
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # Disable Flask's default request logging to reduce terminal noise
+    import logging
+    log = logging.getLogger('werkzeug')
+    log.setLevel(logging.ERROR)
+    
+    app.run(debug=False, host='0.0.0.0', port=5000)

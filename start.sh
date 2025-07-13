@@ -38,4 +38,17 @@ fi
 
 # Start the server
 echo "🚀 Launching ChordiSpeak server..."
-python run.py 
+echo "📝 HTTP requests will be logged to chordispeak.log"
+
+# Create log directory if it doesn't exist
+mkdir -p logs
+
+# Run the server with output filtering
+python run.py 2>&1 | while IFS= read -r line; do
+    if [[ "$line" == *"GET /status"* ]]; then
+        echo "$line" >> logs/chordispeak.log
+    else
+        echo "$line"
+        echo "$line" >> logs/chordispeak.log
+    fi
+done 

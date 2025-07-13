@@ -32,11 +32,16 @@ def main():
     print("⏹️  Press Ctrl+C to stop the server")
     print("-" * 50)
     
+    # Disable Flask's default request logging to reduce terminal noise
+    import logging
+    log = logging.getLogger('werkzeug')
+    log.setLevel(logging.ERROR)
+    
     # Ensure uploads directory exists
     os.makedirs('uploads', exist_ok=True)
     
     try:
-        app.run(debug=True, host='0.0.0.0', port=5001)
+        app.run(debug=False, host='0.0.0.0', port=5001)
     except KeyboardInterrupt:
         print("\n👋 Server stopped. Goodbye!")
         sys.exit(0)
