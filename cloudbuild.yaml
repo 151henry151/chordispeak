@@ -1,0 +1,23 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      [
+        'build',
+        '--build-arg', 'BUILDKIT_INLINE_CACHE=1',
+        '-t', 'gcr.io/$PROJECT_ID/chordispeak:$COMMIT_SHA',
+        '-t', 'gcr.io/$PROJECT_ID/chordispeak:latest',
+        '.'
+      ]
+    env:
+      - 'DOCKER_BUILDKIT=1'
+    id: Build
+    waitFor: ['-']
+
+images:
+  - 'gcr.io/$PROJECT_ID/chordispeak:$COMMIT_SHA'
+  - 'gcr.io/$PROJECT_ID/chordispeak:latest'
+
+options:
+  machineType: 'E2_HIGHCPU_8'
+  dynamic_substitutions: true
+  logging: CLOUD_LOGGING_ONLY 
