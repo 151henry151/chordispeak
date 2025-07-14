@@ -275,6 +275,24 @@
             transform: none;
         }
 
+        .close-modal-button {
+            background: #38a169;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-left: 0.5rem;
+        }
+
+        .close-modal-button:hover {
+            background: #2f855a;
+            transform: translateY(-1px);
+        }
+
         /* Debug Panel Styles */
         .debug-panel {
             margin-top: 1.5rem;
@@ -803,6 +821,7 @@
                     
                     <div class="modal-actions">
                         <button class="cancel-button" id="cancelBtn">❌ Cancel</button>
+                        <button class="close-modal-button" id="closeModalBtn" style="display: none;">🔒 Close Modal</button>
                     </div>
                 </div>
             </div>
@@ -868,6 +887,7 @@
         const debugPanel = document.getElementById('debugPanel');
         const debugLogs = document.getElementById('debugLogs');
         const debugToggle = document.getElementById('debugToggle');
+        const closeModalBtn = document.getElementById('closeModalBtn');
 
         // File upload handling
         fileInput.addEventListener('change', handleFileUpload);
@@ -922,6 +942,23 @@
 
         // Debug toggle handling
         debugToggle.addEventListener('click', toggleDebugPanel);
+
+        // Close modal button handling
+        closeModalBtn.addEventListener('click', handleCloseModal);
+
+        function handleCloseModal() {
+            // Reset the modal state and close it
+            isProcessing = false;
+            currentTaskId = null;
+            processBtn.disabled = false;
+            fileInput.disabled = false;
+            cancelBtn.disabled = false;
+            cancelBtn.textContent = '❌ Cancel';
+            closeModalBtn.style.display = 'none';
+            progressModal.classList.remove('show');
+            // Reset debug panel styling
+            debugPanel.style.border = '1px solid #e9ecef';
+        }
 
         async function handleProcessAudio() {
             const file = fileInput.files[0];
@@ -999,6 +1036,8 @@
             progressModal.classList.add('show');
             resultsContainer.style.display = 'none';
             updateProgress(0, 'Initializing...', 'Starting');
+            // Hide close modal button for new processes
+            closeModalBtn.style.display = 'none';
             // Show debug panel after a few seconds
             setTimeout(() => {
                 debugPanel.style.display = 'block';
@@ -1089,15 +1128,19 @@
                             progress = 0;
                             text = 'Processing failed';
                             statusText = 'Error';
-                            isProcessing = false;
+                            // DO NOT set isProcessing = false to keep modal open and polling active
                             // Show error but DO NOT reset or close modal
                             showError(status.message || 'Processing failed');
                             // Show and highlight debug logs
                             debugPanel.style.display = 'block';
                             debugLogs.scrollIntoView({ behavior: 'smooth', block: 'center' });
                             debugPanel.style.border = '2px solid #c53030';
+                            // Show close modal button for error cases
+                            closeModalBtn.style.display = 'inline-block';
                             // Optionally, update progress bar and badge
                             updateProgress(progress, text, statusText);
+                            // Continue polling to keep modal open and debug logs updated
+                            setTimeout(pollStatus, 1000);
                             return;
                     }
 
@@ -1297,7 +1340,8 @@
             
             // Poll for debug logs every 2 seconds
             const debugInterval = setInterval(async () => {
-                if (!isProcessing || !currentTaskId) {
+                // Continue polling even if processing failed, but stop if task is cancelled or completed
+                if (!currentTaskId) {
                     clearInterval(debugInterval);
                     return;
                 }
