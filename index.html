@@ -1090,8 +1090,14 @@
                             text = 'Processing failed';
                             statusText = 'Error';
                             isProcessing = false;
+                            // Show error but DO NOT reset or close modal
                             showError(status.message || 'Processing failed');
-                            resetProcessing();
+                            // Show and highlight debug logs
+                            debugPanel.style.display = 'block';
+                            debugLogs.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            debugPanel.style.border = '2px solid #c53030';
+                            // Optionally, update progress bar and badge
+                            updateProgress(progress, text, statusText);
                             return;
                     }
 
