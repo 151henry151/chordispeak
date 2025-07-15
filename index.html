@@ -308,6 +308,57 @@
             font-size: 1.1rem;
         }
 
+        /* Main Debug Section Styles */
+        .debug-section {
+            margin: 2rem 0;
+            padding: 1.5rem;
+            background: #f8f9fa;
+            border-radius: 15px;
+            border: 1px solid #e9ecef;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .debug-section h3 {
+            color: #333;
+            margin-bottom: 1rem;
+            font-size: 1.3rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .debug-logs-main {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            line-height: 1.4;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            margin-bottom: 1rem;
+        }
+
+        .debug-toggle-main {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .debug-toggle-main:hover {
+            background: #5a67d8;
+            transform: translateY(-1px);
+        }
+
         .debug-logs {
             background: #2d3748;
             color: #e2e8f0;
@@ -795,6 +846,15 @@
             <!-- Error Message -->
             <div class="error-message" id="errorContainer" style="display: none;"></div>
 
+            <!-- Debug Logs Section (Main Page) -->
+            <div class="debug-section" id="mainDebugSection" style="display: none;">
+                <h3>🔍 Debug Logs</h3>
+                <div class="debug-logs-main" id="mainDebugLogs">
+                    <p>Debug logs will appear here during processing...</p>
+                </div>
+                <button class="debug-toggle-main" id="debugToggleMain">📋 Show/Hide Debug</button>
+            </div>
+
             <!-- Progress Modal -->
             <div class="modal-overlay" id="progressModal">
                 <div class="modal-content">
@@ -888,6 +948,9 @@
         const debugLogs = document.getElementById('debugLogs');
         const debugToggle = document.getElementById('debugToggle');
         const closeModalBtn = document.getElementById('closeModalBtn');
+        const mainDebugSection = document.getElementById('mainDebugSection');
+        const mainDebugLogs = document.getElementById('mainDebugLogs');
+        const debugToggleMain = document.getElementById('debugToggleMain');
 
         // File upload handling
         fileInput.addEventListener('change', handleFileUpload);
@@ -942,6 +1005,7 @@
 
         // Debug toggle handling
         debugToggle.addEventListener('click', toggleDebugPanel);
+        debugToggleMain.addEventListener('click', toggleMainDebugSection);
 
         // Close modal button handling
         closeModalBtn.addEventListener('click', handleCloseModal);
@@ -958,6 +1022,7 @@
             progressModal.classList.remove('show');
             // Reset debug panel styling
             debugPanel.style.border = '1px solid #e9ecef';
+            mainDebugSection.style.border = '1px solid #e9ecef';
         }
 
         async function handleProcessAudio() {
@@ -1038,6 +1103,8 @@
             updateProgress(0, 'Initializing...', 'Starting');
             // Hide close modal button for new processes
             closeModalBtn.style.display = 'none';
+            // Show main debug section immediately
+            mainDebugSection.style.display = 'block';
             // Show debug panel after a few seconds
             setTimeout(() => {
                 debugPanel.style.display = 'block';
@@ -1135,6 +1202,10 @@
                             debugPanel.style.display = 'block';
                             debugLogs.scrollIntoView({ behavior: 'smooth', block: 'center' });
                             debugPanel.style.border = '2px solid #c53030';
+                            // Show and highlight main debug section
+                            mainDebugSection.style.display = 'block';
+                            mainDebugSection.style.border = '2px solid #c53030';
+                            mainDebugSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
                             // Show close modal button for error cases
                             closeModalBtn.style.display = 'inline-block';
                             // Optionally, update progress bar and badge
@@ -1310,6 +1381,7 @@
             hideError();
             progressModal.classList.remove('show');
             resultsContainer.style.display = 'none';
+            mainDebugSection.style.display = 'none';
             audioPlayer.pause();
             audioPlayer.currentTime = 0;
             resetProcessing();
@@ -1332,6 +1404,16 @@
             } else {
                 debugPanel.style.display = 'none';
                 debugToggle.textContent = '📋 Show Debug';
+            }
+        }
+
+        function toggleMainDebugSection() {
+            if (mainDebugSection.style.display === 'none') {
+                mainDebugSection.style.display = 'block';
+                debugToggleMain.textContent = '📋 Hide Debug';
+            } else {
+                mainDebugSection.style.display = 'none';
+                debugToggleMain.textContent = '📋 Show Debug';
             }
         }
 
@@ -1361,12 +1443,17 @@
         function updateDebugLogs(logs) {
             if (!logs || logs.length === 0) {
                 debugLogs.innerHTML = '<p>No debug logs available yet...</p>';
+                mainDebugLogs.innerHTML = '<p>No debug logs available yet...</p>';
                 return;
             }
             
             const logText = logs.join('\n');
             debugLogs.textContent = logText;
             debugLogs.scrollTop = debugLogs.scrollHeight; // Auto-scroll to bottom
+            
+            // Also update main debug section
+            mainDebugLogs.textContent = logText;
+            mainDebugLogs.scrollTop = mainDebugLogs.scrollHeight; // Auto-scroll to bottom
         }
 
         // Remove chord selection buttons and related JS
