@@ -412,7 +412,7 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
             chord_processor = DeepChromaChordRecognitionProcessor(
                 sample_rate=44100,  # Match chroma processor
                 hop_size=512,       # Match chroma processor
-                num_classes=25,     # Include more chord types
+                num_classes=12,     # Match chroma processor num_classes
                 unique_filters=True, # Use unique filters
                 fps=50              # Higher frame rate for temporal resolution
             )
