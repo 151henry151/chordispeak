@@ -393,15 +393,8 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
         # Configure for rapid chord change detection
         print(f"[TASK {task_id}] Initializing DeepChromaProcessor...")
         try:
-            chroma_processor = DeepChromaProcessor(
-                sample_rate=44100,  # Higher sample rate for better resolution
-                hop_size=512,       # Smaller hop size for higher temporal resolution
-                num_octaves=7,      # More octaves for better frequency coverage
-                num_classes=12,     # Full chroma resolution
-                fmin=27.5,          # Lower frequency bound (A0)
-                fmax=3520.0,        # Higher frequency bound (A7)
-                unique_filters=True  # Use unique filters for better accuracy
-            )
+            # Use madmom's default configuration - don't override parameters
+            chroma_processor = DeepChromaProcessor()
             print(f"[TASK {task_id}] DeepChromaProcessor initialized successfully")
         except Exception as e:
             print(f"[TASK {task_id}] ERROR initializing DeepChromaProcessor: {e}")
@@ -409,13 +402,8 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
         
         print(f"[TASK {task_id}] Initializing DeepChromaChordRecognitionProcessor...")
         try:
-            chord_processor = DeepChromaChordRecognitionProcessor(
-                sample_rate=44100,  # Match chroma processor
-                hop_size=512,       # Match chroma processor
-                num_classes=12,     # Match chroma processor num_classes
-                unique_filters=True, # Use unique filters
-                fps=50              # Higher frame rate for temporal resolution
-            )
+            # Use madmom's default configuration - don't override parameters
+            chord_processor = DeepChromaChordRecognitionProcessor()
             print(f"[TASK {task_id}] DeepChromaChordRecognitionProcessor initialized successfully")
         except Exception as e:
             print(f"[TASK {task_id}] ERROR initializing DeepChromaChordRecognitionProcessor: {e}")
