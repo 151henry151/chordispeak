@@ -1395,6 +1395,29 @@ def separate_vocals_demucs(audio_path, output_dir, task_id=None):
             
         log_debug(task_id, f"Vocal separation completed: {vocal_track_path}, {instrumental_track_path}")
         print(f"Vocal separation completed: {vocal_track_path}, {instrumental_track_path}")
+        
+        # Verify files exist and have content
+        if not os.path.exists(vocal_track_path):
+            log_debug(task_id, f"ERROR: Vocal file not created: {vocal_track_path}")
+            print(f"ERROR: Vocal file not created: {vocal_track_path}")
+            return None, None
+            
+        if not os.path.exists(instrumental_track_path):
+            log_debug(task_id, f"ERROR: Instrumental file not created: {instrumental_track_path}")
+            print(f"ERROR: Instrumental file not created: {instrumental_track_path}")
+            return None, None
+            
+        # Check file sizes
+        vocal_size = os.path.getsize(vocal_track_path)
+        instrumental_size = os.path.getsize(instrumental_track_path)
+        log_debug(task_id, f"Vocal file size: {vocal_size} bytes, Instrumental file size: {instrumental_size} bytes")
+        print(f"Vocal file size: {vocal_size} bytes, Instrumental file size: {instrumental_size} bytes")
+        
+        if vocal_size == 0 or instrumental_size == 0:
+            log_debug(task_id, f"ERROR: One or both files are empty")
+            print(f"ERROR: One or both files are empty")
+            return None, None
+            
         return vocal_track_path, instrumental_track_path
         
     except Exception as e:
@@ -1518,6 +1541,23 @@ def process_audio_task(task_id, file_path):
         try:
             # Use madmom's default detection with progress tracking
             log_debug(task_id, "Calling detect_chords function...")
+            
+            # Double-check file exists before chord detection
+            if not os.path.exists(instrumental_path):
+                error_msg = f"Instrumental file not found: {instrumental_path}"
+                log_debug(task_id, f"ERROR: {error_msg}")
+                print(f"ERROR: {error_msg}")
+                raise RuntimeError(error_msg)
+            
+            # Check file size
+            file_size = os.path.getsize(instrumental_path)
+            log_debug(task_id, f"Instrumental file size: {file_size} bytes")
+            if file_size == 0:
+                error_msg = f"Instrumental file is empty: {instrumental_path}"
+                log_debug(task_id, f"ERROR: {error_msg}")
+                print(f"ERROR: {error_msg}")
+                raise RuntimeError(error_msg)
+            
             chords = detect_chords(instrumental_path, task_id=task_id)
             log_debug(task_id, f"detect_chords returned {len(chords)} chords")
             chord_time = time.time() - chord_start
