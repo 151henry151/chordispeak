@@ -429,8 +429,6 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
     try:
         import time
         print(f"[TASK {task_id}] Importing madmom modules...")
-        from madmom.audio.chroma import DeepChromaProcessor
-        from madmom.processors import SequentialProcessor
         from madmom.features.chords import DeepChromaChordRecognitionProcessor
         print(f"[TASK {task_id}] Madmom modules imported successfully")
         
@@ -442,16 +440,9 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
         # Initialize madmom chord detection using the correct approach
         print(f"[TASK {task_id}] Initializing madmom processors...")
         try:
-            # Use SequentialProcessor to chain chroma extraction and chord recognition
-            # This is the correct madmom approach
-            chroma_processor = DeepChromaProcessor()
-            chord_processor = DeepChromaChordRecognitionProcessor()
-            
-            # Chain them together using SequentialProcessor
-            chord_detector = SequentialProcessor([
-                chroma_processor,
-                chord_processor
-            ])
+            # Use DeepChromaChordRecognitionProcessor directly - it handles both chroma extraction and chord recognition
+            # This is the correct madmom approach according to documentation
+            chord_detector = DeepChromaChordRecognitionProcessor()
             print(f"[TASK {task_id}] Madmom processors initialized successfully")
         except Exception as e:
             print(f"[TASK {task_id}] ERROR initializing madmom processors: {e}")
@@ -466,7 +457,7 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
             tasks[task_id]['progress'] = 40
             print(f"[TASK {task_id}] Progress: 40% - Starting chord detection")
         
-        # Process the audio file with the chained processor
+        # Process the audio file with the chord detector
         print(f"[TASK {task_id}] Starting chord detection...")
         try:
             chords = chord_detector(audio_file)
