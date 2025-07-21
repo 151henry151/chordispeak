@@ -391,18 +391,9 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
         
         # Initialize madmom chord detection with high sensitivity settings
         # Configure for rapid chord change detection
-        print(f"[TASK {task_id}] Initializing DeepChromaProcessor...")
-        try:
-            # Use madmom's default configuration - don't override parameters
-            chroma_processor = DeepChromaProcessor()
-            print(f"[TASK {task_id}] DeepChromaProcessor initialized successfully")
-        except Exception as e:
-            print(f"[TASK {task_id}] ERROR initializing DeepChromaProcessor: {e}")
-            raise RuntimeError(f"Failed to initialize DeepChromaProcessor: {e}")
-        
         print(f"[TASK {task_id}] Initializing DeepChromaChordRecognitionProcessor...")
         try:
-            # Use madmom's default configuration - don't override parameters
+            # Use the correct madmom processor that does both chroma extraction and chord recognition
             chord_processor = DeepChromaChordRecognitionProcessor()
             print(f"[TASK {task_id}] DeepChromaChordRecognitionProcessor initialized successfully")
         except Exception as e:
@@ -412,47 +403,20 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
         # Start timing for progress estimation
         start_time = time.time()
         
-        # Update progress: Starting chroma processing (40-45%)
+        # Update progress: Starting chord detection (40-50%)
         if task_id and task_id in tasks:
-            tasks[task_id]['step'] = 'Analyzing chord pattern (chroma extraction)'
+            tasks[task_id]['step'] = 'Analyzing chord pattern'
             tasks[task_id]['progress'] = 40
-            print(f"[TASK {task_id}] Progress: 40% - Starting chroma extraction")
+            print(f"[TASK {task_id}] Progress: 40% - Starting chord detection")
         
-        # Process the audio file - chroma extraction
-        print(f"[TASK {task_id}] Starting chroma extraction...")
+        # Process the audio file directly with the chord processor
+        print(f"[TASK {task_id}] Starting chord detection...")
         try:
-            chroma = chroma_processor(audio_file)
-            print(f"[TASK {task_id}] Chroma extraction completed successfully")
+            chords = chord_processor(audio_file)
+            print(f"[TASK {task_id}] Chord detection completed successfully")
         except Exception as e:
-            print(f"[TASK {task_id}] ERROR during chroma extraction: {e}")
-            print(f"[TASK {task_id}] Madmom failed, trying fallback chord detection...")
-            # Try fallback chord detection
-            try:
-                return detect_chords_fallback(audio_file, chord_types)
-            except Exception as fallback_error:
-                print(f"[TASK {task_id}] Fallback also failed: {fallback_error}")
-                raise RuntimeError(f"Both madmom and fallback chord detection failed: {e}")
-        
-        # Update progress: Chroma extraction complete, starting chord recognition (45-50%)
-        if task_id and task_id in tasks:
-            tasks[task_id]['step'] = 'Analyzing chord pattern (chord recognition)'
-            tasks[task_id]['progress'] = 45
-            print(f"[TASK {task_id}] Progress: 45% - Chroma extraction complete, starting chord recognition")
-        
-        # Process chords - this is the most time-consuming part
-        print(f"[TASK {task_id}] Starting chord recognition...")
-        try:
-            chords = chord_processor(chroma)
-            print(f"[TASK {task_id}] Chord recognition completed successfully")
-        except Exception as e:
-            print(f"[TASK {task_id}] ERROR during chord recognition: {e}")
-            print(f"[TASK {task_id}] Madmom chord recognition failed, trying fallback...")
-            # Try fallback chord detection
-            try:
-                return detect_chords_fallback(audio_file, chord_types)
-            except Exception as fallback_error:
-                print(f"[TASK {task_id}] Fallback also failed: {fallback_error}")
-                raise RuntimeError(f"Both madmom and fallback chord detection failed: {e}")
+            print(f"[TASK {task_id}] ERROR during chord detection: {e}")
+            raise RuntimeError(f"Chord detection failed: {e}")
         
         # Calculate elapsed time and estimate remaining time
         elapsed_time = time.time() - start_time
