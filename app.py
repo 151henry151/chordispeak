@@ -425,7 +425,13 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
             print(f"[TASK {task_id}] Chroma extraction completed successfully")
         except Exception as e:
             print(f"[TASK {task_id}] ERROR during chroma extraction: {e}")
-            raise RuntimeError(f"Chroma extraction failed: {e}")
+            print(f"[TASK {task_id}] Madmom failed, trying fallback chord detection...")
+            # Try fallback chord detection
+            try:
+                return detect_chords_fallback(audio_file, chord_types)
+            except Exception as fallback_error:
+                print(f"[TASK {task_id}] Fallback also failed: {fallback_error}")
+                raise RuntimeError(f"Both madmom and fallback chord detection failed: {e}")
         
         # Update progress: Chroma extraction complete, starting chord recognition (45-50%)
         if task_id and task_id in tasks:
@@ -440,7 +446,13 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
             print(f"[TASK {task_id}] Chord recognition completed successfully")
         except Exception as e:
             print(f"[TASK {task_id}] ERROR during chord recognition: {e}")
-            raise RuntimeError(f"Chord recognition failed: {e}")
+            print(f"[TASK {task_id}] Madmom chord recognition failed, trying fallback...")
+            # Try fallback chord detection
+            try:
+                return detect_chords_fallback(audio_file, chord_types)
+            except Exception as fallback_error:
+                print(f"[TASK {task_id}] Fallback also failed: {fallback_error}")
+                raise RuntimeError(f"Both madmom and fallback chord detection failed: {e}")
         
         # Calculate elapsed time and estimate remaining time
         elapsed_time = time.time() - start_time
