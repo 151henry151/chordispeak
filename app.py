@@ -430,6 +430,7 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
         import time
         print(f"[TASK {task_id}] Importing madmom modules...")
         from madmom.audio.chroma import DeepChromaProcessor
+        from madmom.processors import SequentialProcessor
         from madmom.features.chords import DeepChromaChordRecognitionProcessor
         print(f"[TASK {task_id}] Madmom modules imported successfully")
         
@@ -438,16 +439,23 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
         audio_duration = len(y) / sr
         print(f"[TASK {task_id}] Audio duration: {audio_duration:.2f} seconds")
         
-        # Initialize madmom chord detection with high sensitivity settings
-        # Configure for rapid chord change detection
-        print(f"[TASK {task_id}] Initializing DeepChromaChordRecognitionProcessor...")
+        # Initialize madmom chord detection using the correct approach
+        print(f"[TASK {task_id}] Initializing madmom processors...")
         try:
-            # Use the correct madmom processor that does both chroma extraction and chord recognition
+            # Use SequentialProcessor to chain chroma extraction and chord recognition
+            # This is the correct madmom approach
+            chroma_processor = DeepChromaProcessor()
             chord_processor = DeepChromaChordRecognitionProcessor()
-            print(f"[TASK {task_id}] DeepChromaChordRecognitionProcessor initialized successfully")
+            
+            # Chain them together using SequentialProcessor
+            chord_detector = SequentialProcessor([
+                chroma_processor,
+                chord_processor
+            ])
+            print(f"[TASK {task_id}] Madmom processors initialized successfully")
         except Exception as e:
-            print(f"[TASK {task_id}] ERROR initializing DeepChromaChordRecognitionProcessor: {e}")
-            raise RuntimeError(f"Failed to initialize DeepChromaChordRecognitionProcessor: {e}")
+            print(f"[TASK {task_id}] ERROR initializing madmom processors: {e}")
+            raise RuntimeError(f"Failed to initialize madmom processors: {e}")
         
         # Start timing for progress estimation
         start_time = time.time()
@@ -458,10 +466,10 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
             tasks[task_id]['progress'] = 40
             print(f"[TASK {task_id}] Progress: 40% - Starting chord detection")
         
-        # Process the audio file directly with the chord processor
+        # Process the audio file with the chained processor
         print(f"[TASK {task_id}] Starting chord detection...")
         try:
-            chords = chord_processor(audio_file)
+            chords = chord_detector(audio_file)
             print(f"[TASK {task_id}] Chord detection completed successfully")
         except Exception as e:
             print(f"[TASK {task_id}] ERROR during chord detection: {e}")
