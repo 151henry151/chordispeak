@@ -284,6 +284,55 @@ def format_chord_for_tts(chord_text):
     # The TTS should handle these better than IPA
     return chord_text
 
+def detect_vocal_content(audio_path, min_vocal_duration=20.0):
+    """Detect if audio contains sufficient vocal content (at least min_vocal_duration seconds)"""
+    print(f"detect_vocal_content called with audio_path: {audio_path}")
+    
+    if not lazy_import_audio_deps():
+        print("Audio processing dependencies not available")
+        return False
+        
+    try:
+        print(f"Loading audio with librosa from: {audio_path}")
+        y, sr = librosa.load(audio_path)
+        print(f"Audio loaded successfully: shape={y.shape}, sr={sr}")
+        
+        # Calculate total duration
+        duration = len(y) / sr
+        print(f"Total audio duration: {duration:.2f} seconds")
+        
+        # Simple vocal detection: look for segments with significant energy
+        # This is a basic approach - in practice you might want more sophisticated vocal detection
+        frame_length = int(0.025 * sr)  # 25ms frames
+        hop_length = int(0.010 * sr)    # 10ms hop
+        
+        # Calculate RMS energy for each frame
+        rms = librosa.feature.rms(y=y, frame_length=frame_length, hop_length=hop_length)[0]
+        
+        # Normalize RMS
+        rms_normalized = rms / np.max(rms) if np.max(rms) > 0 else rms
+        
+        # Threshold for vocal activity (adjust as needed)
+        vocal_threshold = 0.1
+        
+        # Find frames with vocal activity
+        vocal_frames = rms_normalized > vocal_threshold
+        
+        # Calculate vocal duration
+        vocal_duration = np.sum(vocal_frames) * hop_length / sr
+        print(f"Detected vocal duration: {vocal_duration:.2f} seconds")
+        
+        has_sufficient_vocals = vocal_duration >= min_vocal_duration
+        print(f"Has sufficient vocals ({min_vocal_duration}s): {has_sufficient_vocals}")
+        
+        return has_sufficient_vocals
+        
+    except Exception as e:
+        print(f"Vocal content detection error: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
 def extract_voice_sample(vocals_path, sample_duration=None):
     """Extract voice sample from separated vocals for voice cloning"""
     print(f"extract_voice_sample called with vocals_path: {vocals_path}")
@@ -1469,24 +1518,41 @@ def process_audio_task(task_id, file_path):
         log_debug(task_id, f"Vocals file exists: {os.path.exists(vocals_path)}")
         log_debug(task_id, f"Vocals file size: {os.path.getsize(vocals_path) if os.path.exists(vocals_path) else 'N/A'} bytes")
         
-        try:
-            voice_sample, voice_sr = extract_voice_sample(vocals_path)
-            log_debug(task_id, f"Voice sample extraction result: voice_sample={voice_sample is not None}, voice_sr={voice_sr}")
-            voice_sample_path = None
-            if voice_sample is not None:
-                voice_sample_path = os.path.join(task_dir, 'voice_sample.wav')
-                log_debug(task_id, f"Writing voice sample to: {voice_sample_path}")
-                write_wav(voice_sample_path, voice_sr, voice_sample)
-                log_debug(task_id, f"Voice sample written successfully: {voice_sample_path}")
-                print(f"Voice sample extracted: {voice_sample_path}")
+        # Check if vocals contain sufficient vocal content
+        has_sufficient_vocals = detect_vocal_content(vocals_path, min_vocal_duration=20.0)
+        log_debug(task_id, f"Vocal content detection result: has_sufficient_vocals={has_sufficient_vocals}")
+        
+        voice_sample_path = None
+        if has_sufficient_vocals:
+            # Use the extracted vocals for voice cloning
+            try:
+                voice_sample, voice_sr = extract_voice_sample(vocals_path)
+                log_debug(task_id, f"Voice sample extraction result: voice_sample={voice_sample is not None}, voice_sr={voice_sr}")
+                if voice_sample is not None:
+                    voice_sample_path = os.path.join(task_dir, 'voice_sample.wav')
+                    log_debug(task_id, f"Writing voice sample to: {voice_sample_path}")
+                    write_wav(voice_sample_path, voice_sr, voice_sample)
+                    log_debug(task_id, f"Voice sample written successfully: {voice_sample_path}")
+                    print(f"Voice sample extracted from vocals: {voice_sample_path}")
+                else:
+                    log_debug(task_id, "WARNING: Voice sample extraction returned None")
+                    print("WARNING: Voice sample extraction failed")
+            except Exception as e:
+                log_debug(task_id, f"ERROR in voice sample extraction: {e}")
+                print(f"ERROR in voice sample extraction: {e}")
+                import traceback
+                traceback.print_exc()
+        else:
+            # Use the fallback voice training sample
+            fallback_voice_path = "voice_training_sample.mp3"
+            if os.path.exists(fallback_voice_path):
+                voice_sample_path = fallback_voice_path
+                log_debug(task_id, f"Using fallback voice sample: {voice_sample_path}")
+                print(f"Using fallback voice sample (insufficient vocals detected): {voice_sample_path}")
             else:
-                log_debug(task_id, "WARNING: Voice sample extraction returned None")
-                print("WARNING: Voice sample extraction failed")
-        except Exception as e:
-            log_debug(task_id, f"ERROR in voice sample extraction: {e}")
-            print(f"ERROR in voice sample extraction: {e}")
-            import traceback
-            traceback.print_exc()
+                log_debug(task_id, f"ERROR: Fallback voice sample not found: {fallback_voice_path}")
+                print(f"ERROR: Fallback voice sample not found: {fallback_voice_path}")
+                raise RuntimeError(f"Fallback voice sample not found: {fallback_voice_path}")
         
         # Step 4: Chord detection (using instrumental track)
         print(f"\n=== [TASK {task_id}] STEP 4: CHORD DETECTION ===")
