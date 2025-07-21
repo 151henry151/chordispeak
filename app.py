@@ -430,6 +430,8 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
         import time
         print(f"[TASK {task_id}] Importing madmom modules...")
         from madmom.features.chords import DeepChromaChordRecognitionProcessor
+        from madmom.audio.chroma import DeepChromaProcessor
+        from madmom.features.chords import DeepChromaChordRecognitionProcessor
         print(f"[TASK {task_id}] Madmom modules imported successfully")
         
         # Get audio duration for progress estimation
@@ -440,10 +442,12 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
         # Initialize madmom chord detection using the correct approach
         print(f"[TASK {task_id}] Initializing madmom processors...")
         try:
-            # Use DeepChromaChordRecognitionProcessor directly - it handles both chroma extraction and chord recognition
-            # This is the correct madmom approach according to documentation
-            chord_detector = DeepChromaChordRecognitionProcessor()
+            # Try the simpler approach: separate chroma extraction and chord recognition
+            # This avoids the complex internal processing that might be causing shape issues
+            chroma_processor = DeepChromaProcessor()
+            chord_processor = DeepChromaChordRecognitionProcessor()
             print(f"[TASK {task_id}] Madmom processors initialized successfully")
+            
         except Exception as e:
             print(f"[TASK {task_id}] ERROR initializing madmom processors: {e}")
             raise RuntimeError(f"Failed to initialize madmom processors: {e}")
@@ -457,10 +461,17 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
             tasks[task_id]['progress'] = 40
             print(f"[TASK {task_id}] Progress: 40% - Starting chord detection")
         
-        # Process the audio file with the chord detector
+        # Process the audio file with separate chroma extraction and chord recognition
         print(f"[TASK {task_id}] Starting chord detection...")
         try:
-            chords = chord_detector(audio_file)
+            # First extract chroma features
+            print(f"[TASK {task_id}] Extracting chroma features...")
+            chroma = chroma_processor(audio_file)
+            print(f"[TASK {task_id}] Chroma features extracted, shape: {chroma.shape}")
+            
+            # Then perform chord recognition on the chroma features
+            print(f"[TASK {task_id}] Performing chord recognition...")
+            chords = chord_processor(chroma)
             print(f"[TASK {task_id}] Chord detection completed successfully")
         except Exception as e:
             print(f"[TASK {task_id}] ERROR during chord detection: {e}")
