@@ -147,6 +147,9 @@ def log_debug(task_id, message):
         if len(task_logs[task_id]) > 100:
             task_logs[task_id] = task_logs[task_id][-100:]
         print(f"[DEBUG {task_id}] {message}")
+    else:
+        # Always print debug messages even if DEBUG_MODE is False or task_id is None
+        print(f"[DEBUG {task_id}] {message}")
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -1243,7 +1246,7 @@ def separate_vocals_demucs(audio_path, output_dir, task_id=None):
                             if overall_progress > current_progress:
                                 tasks[task_id]['progress'] = overall_progress
                                 tasks[task_id]['step'] = 'Splitting vocal & instrumental'
-                                print(f"[TASK {task_id}] Demucs progress: {demucs_percentage}% -> Overall: {overall_progress}%")
+                                print(f"[TASK {task_id}] Demucs progress: {demucs_percentage}% -> Overall: {overall_progress}% (was {current_progress}%)")
                             else:
                                 # Even if no progress found, update step to show we're still working
                                 tasks[task_id]['step'] = 'Splitting vocal & instrumental'
@@ -1295,7 +1298,7 @@ def separate_vocals_demucs(audio_path, output_dir, task_id=None):
                             if overall_progress > current_progress:
                                 tasks[task_id]['progress'] = overall_progress
                                 tasks[task_id]['step'] = 'Splitting vocal & instrumental'
-                                print(f"[TASK {task_id}] Demucs progress (stderr): {demucs_percentage}% -> Overall: {overall_progress}%")
+                                print(f"[TASK {task_id}] Demucs progress (stderr): {demucs_percentage}% -> Overall: {overall_progress}% (was {current_progress}%)")
                     
                                     # Check if process has finished
                 if process.poll() is not None:

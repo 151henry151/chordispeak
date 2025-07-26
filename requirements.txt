@@ -7,6 +7,6 @@ python-dotenv==1.1.1
 pyttsx3==2.99
 demucs==4.0.1
 wheel==0.45.1
-TTS==0.22.0
+TTS==0.21.0
 madmom==0.16.1
 gunicorn
