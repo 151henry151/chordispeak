@@ -13,6 +13,22 @@ steps:
     id: Build
     waitFor: ['-']
 
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - '$_SERVICE_NAME'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/chordispeak:$COMMIT_SHA'
+      - '--region'
+      - '$_DEPLOY_REGION'
+      - '--platform'
+      - '$_PLATFORM'
+      - '--allow-unauthenticated'
+    id: Deploy
+    waitFor: ['Build']
+
 images:
   - 'gcr.io/$PROJECT_ID/chordispeak:$COMMIT_SHA'
   - 'gcr.io/$PROJECT_ID/chordispeak:latest'
