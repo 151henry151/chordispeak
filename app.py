@@ -449,7 +449,12 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
         # Get audio duration for progress estimation
         y, sr = librosa.load(audio_file, sr=None, mono=True)
         audio_duration = len(y) / sr
-        print(f"[TASK {task_id}] librosa: duration={audio_duration:.2f}s, sr={sr}, shape={y.shape}")
+        print(f"[TASK {task_id}] librosa: duration={audio_duration:.2f}s, sr={sr}, shape={y.shape}, dtype={y.dtype}")
+        
+        # Ensure audio data is float32 for madmom compatibility
+        if y.dtype != np.float32:
+            print(f"[TASK {task_id}] Converting audio dtype from {y.dtype} to float32")
+            y = y.astype(np.float32)
         
         # Initialize madmom chord detection using the correct approach
         print(f"[TASK {task_id}] Initializing madmom processor...")
@@ -472,10 +477,13 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
         # Process the audio file with the chord detector
         print(f"[TASK {task_id}] Starting chord detection...")
         try:
+            print(f"[TASK {task_id}] Calling chord_detector with audio_file: {audio_file}")
             chords = chord_detector(audio_file)
             print(f"[TASK {task_id}] Chord detection completed successfully")
         except Exception as e:
             print(f"[TASK {task_id}] ERROR during chord detection: {e}")
+            import traceback
+            print(f"[TASK {task_id}] Full traceback: {traceback.format_exc()}")
             raise RuntimeError(f"Chord detection failed: {e}")
         
         # Calculate elapsed time and estimate remaining time
