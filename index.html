@@ -1023,6 +1023,10 @@
             // Reset debug panel styling
             debugPanel.style.border = '1px solid #e9ecef';
             mainDebugSection.style.border = '1px solid #e9ecef';
+            mainDebugSection.style.backgroundColor = '';
+            mainDebugLogs.style.backgroundColor = '';
+            mainDebugLogs.style.padding = '';
+            mainDebugLogs.style.borderRadius = '';
         }
 
         async function handleProcessAudio() {
@@ -1103,6 +1107,9 @@
             updateProgress(0, 'Initializing...', 'Starting');
             // Hide close modal button for new processes
             closeModalBtn.style.display = 'none';
+            // Clear previous debug logs
+            debugLogs.innerHTML = '<p>Debug logs will appear here during processing...</p>';
+            mainDebugLogs.innerHTML = '<p>Debug logs will appear here during processing...</p>';
             // Show main debug section immediately
             mainDebugSection.style.display = 'block';
             // Show debug panel after a few seconds
@@ -1124,7 +1131,10 @@
         }
 
         async function pollStatus() {
-            if (!currentTaskId || !isProcessing) return;
+            if (!currentTaskId) return;
+            
+            // Continue polling even if processing failed (isProcessing = false) to keep modal open
+            // Only stop if there's no currentTaskId
 
             try {
                 const response = await fetch(`/status/${currentTaskId}`);
@@ -1204,8 +1214,13 @@
                             debugPanel.style.border = '2px solid #c53030';
                             // Show and highlight main debug section
                             mainDebugSection.style.display = 'block';
-                            mainDebugSection.style.border = '2px solid #c53030';
+                            mainDebugSection.style.border = '3px solid #c53030';
+                            mainDebugSection.style.backgroundColor = '#fef2f2';
                             mainDebugSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            // Make debug logs immediately visible
+                            mainDebugLogs.style.backgroundColor = '#fef2f2';
+                            mainDebugLogs.style.padding = '10px';
+                            mainDebugLogs.style.borderRadius = '5px';
                             // Show close modal button for error cases
                             closeModalBtn.style.display = 'inline-block';
                             // Optionally, update progress bar and badge
