@@ -11,6 +11,9 @@ ENV PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128
 ENV CUDA_LAUNCH_BLOCKING=0
 ENV TORCH_CUDNN_V8_API_ENABLED=1
 
+# Pre-accept Coqui TTS license to avoid interactive prompts
+ENV COQUI_TOS_AGREED=1
+
 # Set work directory
 WORKDIR /app
 
