@@ -380,6 +380,9 @@ def synthesize_chord_speech_coqui(text, voice_sample_path, output_path):
             torch.cuda.empty_cache()
             print(f"GPU memory before TTS model load: {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
         
+        # Pre-accept Coqui TTS license to avoid interactive prompts
+        os.environ['COQUI_TOS_AGREED'] = '1'
+        
         tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
         
         if device == "cuda":
@@ -430,27 +433,29 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
         import time
         print(f"[TASK {task_id}] Importing madmom modules...")
         from madmom.features.chords import DeepChromaChordRecognitionProcessor
-        from madmom.audio.chroma import DeepChromaProcessor
-        from madmom.features.chords import DeepChromaChordRecognitionProcessor
         print(f"[TASK {task_id}] Madmom modules imported successfully")
         
+        # Debug: Print audio file info
+        import soundfile as sf
+        try:
+            info = sf.info(audio_file)
+            print(f"[TASK {task_id}] Audio file info: samplerate={info.samplerate}, channels={info.channels}, duration={info.duration:.2f}s, format={info.format}, subtype={info.subtype}")
+        except Exception as e:
+            print(f"[TASK {task_id}] Could not get audio file info with soundfile: {e}")
+        
         # Get audio duration for progress estimation
-        y, sr = librosa.load(audio_file)
+        y, sr = librosa.load(audio_file, sr=None, mono=True)
         audio_duration = len(y) / sr
-        print(f"[TASK {task_id}] Audio duration: {audio_duration:.2f} seconds")
+        print(f"[TASK {task_id}] librosa: duration={audio_duration:.2f}s, sr={sr}, shape={y.shape}")
         
         # Initialize madmom chord detection using the correct approach
-        print(f"[TASK {task_id}] Initializing madmom processors...")
+        print(f"[TASK {task_id}] Initializing madmom processor...")
         try:
-            # Try the simpler approach: separate chroma extraction and chord recognition
-            # This avoids the complex internal processing that might be causing shape issues
-            chroma_processor = DeepChromaProcessor()
-            chord_processor = DeepChromaChordRecognitionProcessor()
-            print(f"[TASK {task_id}] Madmom processors initialized successfully")
-            
+            chord_detector = DeepChromaChordRecognitionProcessor()
+            print(f"[TASK {task_id}] Madmom processor initialized successfully")
         except Exception as e:
-            print(f"[TASK {task_id}] ERROR initializing madmom processors: {e}")
-            raise RuntimeError(f"Failed to initialize madmom processors: {e}")
+            print(f"[TASK {task_id}] ERROR initializing madmom processor: {e}")
+            raise RuntimeError(f"Failed to initialize madmom processor: {e}")
         
         # Start timing for progress estimation
         start_time = time.time()
@@ -461,17 +466,10 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
             tasks[task_id]['progress'] = 40
             print(f"[TASK {task_id}] Progress: 40% - Starting chord detection")
         
-        # Process the audio file with separate chroma extraction and chord recognition
+        # Process the audio file with the chord detector
         print(f"[TASK {task_id}] Starting chord detection...")
         try:
-            # First extract chroma features
-            print(f"[TASK {task_id}] Extracting chroma features...")
-            chroma = chroma_processor(audio_file)
-            print(f"[TASK {task_id}] Chroma features extracted, shape: {chroma.shape}")
-            
-            # Then perform chord recognition on the chroma features
-            print(f"[TASK {task_id}] Performing chord recognition...")
-            chords = chord_processor(chroma)
+            chords = chord_detector(audio_file)
             print(f"[TASK {task_id}] Chord detection completed successfully")
         except Exception as e:
             print(f"[TASK {task_id}] ERROR during chord detection: {e}")
@@ -549,20 +547,20 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
                 if chord_label == 'N':
                     filtered_out_count += 1
                     continue
-                    
+                
                 # Filter by confidence threshold
                 if confidence < min_confidence:
                     print(f"Filtered out low confidence chord: {chord_label} at {start_time:.2f}s (confidence: {confidence:.3f} < {min_confidence})")
                     filtered_out_count += 1
                     continue
-                    
+                
                 # Skip very short chord detections
                 chord_duration = end_time - start_time
                 if chord_duration < min_chord_duration:
                     print(f"Filtered out short chord: {chord_label} at {start_time:.2f}s (duration: {chord_duration:.3f}s < {min_chord_duration}s)")
                     filtered_out_count += 1
                     continue
-                    
+                
                 # Convert madmom chord labels to our format
                 chord_name = convert_madmom_chord(chord_label)
                 
@@ -651,26 +649,15 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
         # Additional check: If no chords detected in first 10 seconds, try to force early detection
         early_chords = [c for c in chords_with_timing if c['time'] < 10.0]
         if len(early_chords) == 0 and len(chords_with_timing) > 0:
-            print(f"Warning: No chords detected in first 10 seconds. Earliest chord at {chords_with_timing[0]['time']:.2f}s")
-            # Try to add a chord at the beginning if we have any valid chords
-            if len(valid_chords) > 0:
-                # Find the earliest valid chord and add it at time 0
-                earliest_valid = min(valid_chords, key=lambda x: x['start_time'])
-                if earliest_valid['start_time'] > 5.0:  # If earliest is after 5s, add at 0
-                    print(f"Adding early chord at 0.0s: {earliest_valid['chord']}")
-                    chords_with_timing.insert(0, {
-                        'time': 0.0,
-                        'chord': earliest_valid['chord'],
-                        'speech': chord_to_ipa_phonemes(earliest_valid['chord']),
-                        'confidence': earliest_valid['confidence'],
-                        'duration': earliest_valid['duration']
-                    })
+            print(f"Warning: No chords detected in first 10 seconds. Forcing early chord detection.")
+            chords_with_timing[0]['time'] = 0.0
         
         return chords_with_timing
     except Exception as e:
-        print(f"Madmom chord detection error: {e}")
-        # Re-raise the exception to fail properly
-        raise RuntimeError(f"Chord detection failed: {str(e)}")
+        print(f"[TASK {task_id}] ERROR in chord detection: {e}")
+        import traceback
+        traceback.print_exc()
+        raise RuntimeError(f"Chord detection failed: {e}")
 
 def convert_madmom_chord(madmom_label):
     """Convert madmom chord labels to our chord format"""
