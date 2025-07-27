@@ -433,6 +433,34 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
     
     if not lazy_import_audio_deps():
         raise RuntimeError("Audio processing dependencies not available. Cannot perform chord detection.")
+    
+    # Comprehensive audio file validation
+    print(f"[TASK {task_id}] Validating audio file: {audio_file}")
+    try:
+        import os
+        if not os.path.exists(audio_file):
+            raise RuntimeError(f"Audio file does not exist: {audio_file}")
+        
+        file_size = os.path.getsize(audio_file)
+        if file_size == 0:
+            raise RuntimeError(f"Audio file is empty: {audio_file}")
+        
+        print(f"[TASK {task_id}] Audio file validation passed: size={file_size} bytes")
+        
+        # Try to validate with soundfile first
+        import soundfile as sf
+        try:
+            info = sf.info(audio_file)
+            print(f"[TASK {task_id}] Soundfile validation: samplerate={info.samplerate}, channels={info.channels}, duration={info.duration:.2f}s")
+            if info.duration <= 0:
+                raise RuntimeError(f"Audio file has zero duration: {audio_file}")
+        except Exception as sf_error:
+            print(f"[TASK {task_id}] Warning: Soundfile validation failed: {sf_error}")
+            # Continue with librosa validation
+        
+    except Exception as validation_error:
+        print(f"[TASK {task_id}] Audio file validation failed: {validation_error}")
+        raise RuntimeError(f"Audio file validation failed: {validation_error}")
         
     try:
         import time
@@ -449,9 +477,45 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
             print(f"[TASK {task_id}] Could not get audio file info with soundfile: {e}")
         
         # Get audio duration for progress estimation
-        y, sr = librosa.load(audio_file, sr=None, mono=True, dtype=np.float32)
-        audio_duration = len(y) / sr
-        print(f"[TASK {task_id}] librosa: duration={audio_duration:.2f}s, sr={sr}, shape={y.shape}, dtype={y.dtype}")
+        # Use madmom's own audio loading for better compatibility
+        print(f"[TASK {task_id}] Loading audio with madmom's audio loader...")
+        try:
+            from madmom.io.audio import load_audio_file
+            y, sr = load_audio_file(audio_file, sample_rate=44100, num_channels=1, dtype=np.float32)
+            audio_duration = len(y) / sr
+            print(f"[TASK {task_id}] Madmom audio loader: duration={audio_duration:.2f}s, sr={sr}, shape={y.shape}, dtype={y.dtype}")
+        except Exception as madmom_load_error:
+            print(f"[TASK {task_id}] Madmom audio loading failed: {madmom_load_error}")
+            print(f"[TASK {task_id}] Falling back to librosa...")
+            # Fallback to librosa
+            y, sr = librosa.load(audio_file, sr=None, mono=True, dtype=np.float32)
+            audio_duration = len(y) / sr
+            print(f"[TASK {task_id}] Librosa fallback: duration={audio_duration:.2f}s, sr={sr}, shape={y.shape}, dtype={y.dtype}")
+        
+        # CRITICAL: Check for string data in audio (this causes the NumPy error)
+        if y.dtype.kind in ['U', 'S']:
+            print(f"[TASK {task_id}] ERROR: Audio data contains strings! dtype={y.dtype}")
+            print(f"[TASK {task_id}] This will cause the NumPy multiply error. Attempting to fix...")
+            
+            # Try to reload with different parameters
+            try:
+                print(f"[TASK {task_id}] Attempting to reload audio with explicit numeric conversion...")
+                y, sr = librosa.load(audio_file, sr=44100, mono=True, dtype=np.float32)
+                
+                # Check again
+                if y.dtype.kind in ['U', 'S']:
+                    print(f"[TASK {task_id}] ERROR: Still getting string data after reload!")
+                    raise RuntimeError("Audio file contains string data instead of numeric data")
+                else:
+                    print(f"[TASK {task_id}] Successfully reloaded audio with numeric data: dtype={y.dtype}")
+            except Exception as reload_error:
+                print(f"[TASK {task_id}] Failed to reload audio: {reload_error}")
+                raise RuntimeError(f"Audio file appears to be corrupted or contains invalid data: {reload_error}")
+        
+        # Additional validation: Check for NaN or Inf values
+        if np.any(np.isnan(y)) or np.any(np.isinf(y)):
+            print(f"[TASK {task_id}] WARNING: Audio contains NaN or Inf values, cleaning...")
+            y = np.nan_to_num(y, nan=0.0, posinf=1.0, neginf=-1.0)
         
         # Ensure audio data is float32 for madmom compatibility
         if y.dtype != np.float32:
@@ -475,6 +539,18 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
         
         # Ensure audio is contiguous in memory
         y = np.ascontiguousarray(y, dtype=np.float32)
+        
+        # Final validation before processing
+        print(f"[TASK {task_id}] Final audio validation:")
+        print(f"[TASK {task_id}]   - Shape: {y.shape}")
+        print(f"[TASK {task_id}]   - Dtype: {y.dtype}")
+        print(f"[TASK {task_id}]   - Range: [{np.min(y):.6f}, {np.max(y):.6f}]")
+        print(f"[TASK {task_id}]   - Has NaN: {np.any(np.isnan(y))}")
+        print(f"[TASK {task_id}]   - Has Inf: {np.any(np.isinf(y))}")
+        print(f"[TASK {task_id}]   - Is numeric: {np.issubdtype(y.dtype, np.number)}")
+        
+        if not np.issubdtype(y.dtype, np.number):
+            raise RuntimeError("Audio data is not numeric - cannot proceed with chord detection")
         
         # Initialize madmom chord detection using the recommended two-step approach
         print(f"[TASK {task_id}] Initializing madmom processors...")
@@ -571,10 +647,11 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
                 print(f"[TASK {task_id}] Audio file path: {audio_file}")
                 print(f"[TASK {task_id}] Audio file type: {type(audio_file)}")
                 
+                # According to madmom documentation, processors should handle audio loading internally
                 # Try the recommended two-step approach first
                 try:
                     print(f"[TASK {task_id}] Using two-step madmom approach...")
-                    # Step 1: Extract chroma features
+                    # Step 1: Extract chroma features - pass file path directly
                     chroma = chroma_processor(audio_file)
                     print(f"[TASK {task_id}] Chroma features extracted: shape={chroma.shape}")
                     
@@ -586,7 +663,7 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
                     print(f"[TASK {task_id}] Two-step approach failed: {two_step_error}")
                     print(f"[TASK {task_id}] Falling back to single-step approach...")
                     
-                    # Fallback to single-step approach
+                    # Fallback to single-step approach - pass file path directly
                     chords = chord_detector(audio_file)
                     print(f"[TASK {task_id}] Single-step chord detection completed successfully")
                 
@@ -595,6 +672,49 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
                 print(f"[TASK {task_id}] ERROR during chord detection call: {chord_error}")
                 import traceback
                 traceback.print_exc()
+                
+                # Enhanced fallback strategy with multiple approaches
+                print(f"[TASK {task_id}] Attempting multiple fallback approaches...")
+                
+                # Approach 1: Try with madmom's audio loading first
+                try:
+                    print(f"[TASK {task_id}] Fallback 1: Using madmom's audio loading...")
+                    from madmom.io.audio import load_audio_file
+                    y_madmom, sr_madmom = load_audio_file(audio_file, sample_rate=44100, num_channels=1, dtype=np.float32)
+                    
+                    # Validate the madmom-loaded data
+                    if y_madmom.dtype.kind in ['U', 'S']:
+                        raise RuntimeError("Madmom-loaded audio still contains string data")
+                    
+                    # Try chord detection with madmom-loaded data
+                    chords = chord_detector(audio_file)
+                    print(f"[TASK {task_id}] Fallback 1 succeeded")
+                    
+                except Exception as fallback1_error:
+                    print(f"[TASK {task_id}] Fallback 1 failed: {fallback1_error}")
+                    
+                    # Approach 2: Try with different madmom processor
+                    try:
+                        print(f"[TASK {task_id}] Fallback 2: Using alternative madmom processor...")
+                        from madmom.features.chords import DeepChromaProcessor
+                        alt_processor = DeepChromaProcessor()
+                        chords = alt_processor(audio_file)
+                        print(f"[TASK {task_id}] Fallback 2 succeeded")
+                        
+                    except Exception as fallback2_error:
+                        print(f"[TASK {task_id}] Fallback 2 failed: {fallback2_error}")
+                        
+                        # Approach 3: Try with librosa-based fallback
+                        try:
+                            print(f"[TASK {task_id}] Fallback 3: Using librosa-based chord detection...")
+                            chords = detect_chords_fallback(audio_file, chord_types)
+                            print(f"[TASK {task_id}] Fallback 3 succeeded")
+                            
+                        except Exception as fallback3_error:
+                            print(f"[TASK {task_id}] All fallback approaches failed!")
+                            print(f"[TASK {task_id}] Final error: {fallback3_error}")
+                            raise RuntimeError(f"All chord detection methods failed. Last error: {fallback3_error}")
+                
                 # Try to provide more specific error information
                 if "ufunc 'multiply'" in str(chord_error):
                     print(f"[TASK {task_id}] This appears to be a NumPy type mismatch error. Checking audio data types...")
@@ -608,19 +728,20 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
                         # Try multiple approaches to fix the issue
                         print(f"[TASK {task_id}] Attempting multiple fixes...")
                         
-                        # Approach 1: Reload audio with explicit dtype
+                        # Approach 1: Try with madmom's audio loading
                         try:
-                            y, sr = librosa.load(audio_file, sr=None, mono=True, dtype=np.float32)
-                            print(f"[TASK {task_id}] Reloaded audio with float32: shape={y.shape}, dtype={y.dtype}")
+                            from madmom.io.audio import load_audio_file
+                            y, sr = load_audio_file(audio_file, sample_rate=44100, num_channels=1, dtype=np.float32)
+                            print(f"[TASK {task_id}] Madmom audio loading: shape={y.shape}, dtype={y.dtype}")
                             
                             # Verify the data is numeric
                             if not np.issubdtype(y.dtype, np.number):
                                 print(f"[TASK {task_id}] ERROR: Audio data is not numeric! dtype={y.dtype}")
                                 raise RuntimeError("Audio data contains non-numeric values")
                             
-                            # Try chord detection again with the reloaded audio
+                            # Try chord detection again with the madmom-loaded audio
                             chords = chord_detector(audio_file)
-                            print(f"[TASK {task_id}] Chord detection succeeded after reloading audio")
+                            print(f"[TASK {task_id}] Chord detection succeeded after madmom audio loading")
                         except Exception as retry_error:
                             print(f"[TASK {task_id}] Approach 1 failed: {retry_error}")
                             
