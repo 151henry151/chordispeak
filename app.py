@@ -1761,217 +1761,268 @@ def process_audio_task(task_id, file_path):
     log_debug(task_id, f"Task {task_id} started. File: {file_path}")
     
     try:
-        # 1. Vocal Separation (using Demucs AI)
-        print(f"Step 1: Vocal Separation for task {task_id}")
-        tasks[task_id]['step'] = 'Vocal Separation'
+        # Step 1: Audio preparation
+        print(f"\n=== [TASK {task_id}] STEP 1: AUDIO PREPARATION ===")
+        tasks[task_id]['step'] = 'Preparing audio file'
         tasks[task_id]['progress'] = 10
-        print(f"[TASK {task_id}] Progress: 10% - Starting vocal separation")
+        print(f"[TASK {task_id}] Progress: 10% - Preparing audio file")
         
-        # Assuming Demucs AI is installed and accessible
-        # This part would typically involve calling a Demucs AI script or API
-        # For demonstration, we'll simulate vocal separation
-        print(f"[TASK {task_id}] Simulating vocal separation...")
-        # In a real app, you'd call a Demucs AI script here
-        # This would involve:
-        # 1. Saving the uploaded file to a temporary location
-        # 2. Running Demucs AI on it
-        # 3. Saving the separated vocals and instrumental to task_dir
+        # Convert to WAV for processing
+        from pydub import AudioSegment
+        audio = AudioSegment.from_file(file_path)
+        input_path = os.path.join(os.path.dirname(file_path), 'input.wav')
+        audio.export(input_path, format='wav')
+        print(f"[TASK {task_id}] Converted to WAV: {input_path}")
         
-        # Simulate vocal separation
-        vocals_path = os.path.join(task_dir, 'vocal_track.wav')
-        instrumental_path = os.path.join(task_dir, 'instrumental_track.wav')
+        # Step 2: Vocal separation with Demucs
+        print(f"\n=== [TASK {task_id}] STEP 2: VOCAL SEPARATION ===")
+        tasks[task_id]['step'] = 'Splitting vocal & instrumental'
+        tasks[task_id]['progress'] = 15
+        print(f"[TASK {task_id}] Progress: 15% - Starting vocal separation")
         
-        # In a real app, you'd run Demucs AI here
-        # Example (replace with actual Demucs AI command or script):
-        # subprocess.run(['demucs', '--two-stems=vocals', file_path, '--out', task_dir])
+        task_dir = os.path.dirname(input_path)
         
-        # For demonstration, we'll just copy the original file to the instrumental path
-        # and create a dummy vocals path
-        shutil.copy2(file_path, instrumental_path)
-        # In a real app, you'd run Demucs AI on file_path and save to vocals_path
-        # shutil.copy2(file_path, vocals_path) # This would require Demucs AI output
+        # Run Demucs separation
+        demucs_cmd = [
+            'demucs', '--two-stems=vocals', '--out', task_dir, 
+            '--mp3', '--mp3-bitrate', '128', input_path
+        ]
         
-        # Simulate vocal content detection
-        has_vocals = detect_vocal_content(instrumental_path)
-        if not has_vocals:
-            raise RuntimeError("No sufficient vocal content detected in the instrumental track.")
+        print(f"[TASK {task_id}] Running Demucs: {' '.join(demucs_cmd)}")
+        process = subprocess.Popen(
+            demucs_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            universal_newlines=True,
+            bufsize=1
+        )
         
-        # Log vocal separation progress
-        log_debug(task_id, f"Vocal separation complete. Vocal track: {vocals_path}, Instrumental track: {instrumental_path}")
+        # Monitor Demucs progress
+        demucs_output = []
+        for line in process.stdout:
+            demucs_output.append(line.strip())
+            if 'progress' in line.lower() or '%' in line:
+                print(f"[TASK {task_id}] Demucs: {line.strip()}")
         
-        # 2. Voice Sample Extraction
-        print(f"Step 2: Voice Sample Extraction for task {task_id}")
-        tasks[task_id]['step'] = 'Voice Sample Extraction'
-        tasks[task_id]['progress'] = 20
-        print(f"[TASK {task_id}] Progress: 20% - Starting voice sample extraction")
+        process.wait()
         
-        # Extract a clean voice sample from the separated vocals
-        vocals_audio = AudioSegment.from_wav(instrumental_path) # Use instrumental as vocals for sample
-        if len(vocals_audio) < 1000: # Ensure enough audio for a sample
-            raise RuntimeError("Voice sample too short for extraction.")
+        if process.returncode != 0:
+            raise RuntimeError(f"Demucs failed with return code {process.returncode}")
         
-        # Find the segment with the most vocal energy
-        # This is a simplified approach; a more robust method would involve vocal activity detection
-        # For now, we'll just take a chunk from the beginning
-        sample_start = 0
-        sample_end = min(len(vocals_audio), 1000) # Take first 1 second
+        print(f"[TASK {task_id}] Demucs separation completed successfully")
+        
+        # Update progress
+        tasks[task_id]['step'] = 'Vocal separation complete'
+        tasks[task_id]['progress'] = 30
+        print(f"[TASK {task_id}] Progress: 30% - Vocal separation complete")
+        
+        # Step 3: Voice sample extraction
+        print(f"\n=== [TASK {task_id}] STEP 3: VOICE SAMPLE EXTRACTION ===")
+        tasks[task_id]['step'] = 'Extracting voice sample'
+        tasks[task_id]['progress'] = 35
+        print(f"[TASK {task_id}] Progress: 35% - Extracting voice sample")
+        
+        # Find Demucs output files
+        demucs_output_dir = os.path.join(task_dir, 'htdemucs')
+        if not os.path.exists(demucs_output_dir):
+            raise RuntimeError("Demucs output directory not found")
+        
+        # Look for the input subdirectory
+        input_subdir = None
+        for item in os.listdir(demucs_output_dir):
+            item_path = os.path.join(demucs_output_dir, item)
+            if os.path.isdir(item_path):
+                input_subdir = item_path
+                break
+        
+        if not input_subdir:
+            raise RuntimeError("Demucs input subdirectory not found")
+        
+        # Define paths for vocal and instrumental files
+        vocal_path = os.path.join(input_subdir, 'vocals.mp3')
+        instrumental_path = os.path.join(input_subdir, 'no_vocals.mp3')
+        
         voice_sample_path = os.path.join(task_dir, 'voice_sample.wav')
-        vocals_audio[sample_start:sample_end].export(voice_sample_path, format='wav')
         
-        # Log voice sample extraction progress
-        log_debug(task_id, f"Voice sample extraction complete. Voice sample: {voice_sample_path}")
+        # Check if vocal file exists
+        if not os.path.exists(vocal_path):
+            raise RuntimeError(f"Vocal track not found after Demucs separation. Expected: {vocal_path}")
         
-        # 3. Chord Detection
-        print(f"Step 3: Chord Detection for task {task_id}")
-        tasks[task_id]['step'] = 'Chord Detection'
+        # Convert MP3 to WAV for voice cloning
+        from pydub import AudioSegment
+        vocal_audio = AudioSegment.from_mp3(vocal_path)
+        vocal_audio.export(voice_sample_path, format='wav')
+        print(f"[TASK {task_id}] Voice sample extracted: {voice_sample_path}")
+        
+        # Step 4: Chord detection
+        print(f"\n=== [TASK {task_id}] STEP 4: CHORD DETECTION ===")
+        tasks[task_id]['step'] = 'Analyzing chord pattern'
         tasks[task_id]['progress'] = 40
         print(f"[TASK {task_id}] Progress: 40% - Starting chord detection")
         
-        # Detect chords using madmom
-        chords = detect_chords(instrumental_path, task_id=task_id)
+        # Check if instrumental file exists
+        if not os.path.exists(instrumental_path):
+            raise RuntimeError(f"Instrumental track not found after Demucs separation. Expected: {instrumental_path}")
         
-        # Log chord detection progress
-        log_debug(task_id, f"Chord detection complete. {len(chords)} chords detected.")
+        # Convert MP3 to WAV for chord detection
+        instrumental_wav_path = os.path.join(task_dir, 'instrumental_track.wav')
+        from pydub import AudioSegment
+        instrumental_audio = AudioSegment.from_mp3(instrumental_path)
+        instrumental_audio.export(instrumental_wav_path, format='wav')
+        print(f"[TASK {task_id}] Converted instrumental to WAV: {instrumental_wav_path}")
         
-        # 4. Voice Synthesis
-        print(f"Step 4: Voice Synthesis for task {task_id}")
-        tasks[task_id]['step'] = 'Voice Synthesis'
-        tasks[task_id]['progress'] = 70
-        print(f"[TASK {task_id}] Progress: 70% - Starting voice synthesis")
+        # Use the madmom compatibility layer
+        from madmom_compat import detect_chords_simple
+        chords = detect_chords_simple(instrumental_wav_path, task_id)
         
-        # Synthesize speech for each chord
-        tts_start = time.time()
-        unique_chords = list(set(chord_data['speech'] for chord_data in chords))
-        print(f"[TASK {task_id}] Unique chords to synthesize: {len(unique_chords)}")
-        print(f"[TASK {task_id}] Unique chords: {unique_chords}")
+        if not chords or len(chords) == 0:
+            raise RuntimeError("No chords detected. This could indicate an issue with the audio file or chord detection.")
         
-        tts_cache = {}
+        print(f"[TASK {task_id}] Raw madmom output: {len(chords)} chord segments")
         
-        # Update progress for each chord synthesis
-        for i, chord_speech in enumerate(unique_chords):
-            # Update progress for each chord (70-85%) with whole numbers only
-            # Simple mapping: 0->70%, 1->72%, 2->75%, 3->77%, 4->80%, 5->82%, 6->85%
-            if len(unique_chords) == 1:
-                chord_progress = 70
-            elif len(unique_chords) == 2:
-                chord_progress = 70 if i == 0 else 85
-            elif len(unique_chords) == 3:
-                chord_progress = 70 if i == 0 else (77 if i == 1 else 85)
-            elif len(unique_chords) == 4:
-                chord_progress = 70 if i == 0 else (75 if i == 1 else (80 if i == 2 else 85))
-            else:
-                # For 5+ chords, use simple increments
-                chord_progress = 70 + (i * 3)  # 70, 73, 76, 79, 82, 85
-                if chord_progress > 85:
-                    chord_progress = 85
+        # Process madmom output format
+        valid_chords = []
+        filtered_out_count = 0
+        min_confidence = 0.5
+        min_chord_duration = 0.5
+        min_time_between_chords = 1.0
+        
+        print(f"[TASK {task_id}] Processing {len(chords)} chord segments from madmom...")
+        
+        for i, chord_data in enumerate(chords):
+            try:
+                # Madmom format: [start_time, end_time, chord_label, confidence]
+                if len(chord_data) >= 4:
+                    start_time = float(chord_data[0])
+                    end_time = float(chord_data[1])
+                    chord_label = str(chord_data[2])
+                    confidence = float(chord_data[3])
+                elif len(chord_data) == 3:
+                    start_time = float(chord_data[0])
+                    end_time = float(chord_data[1])
+                    chord_label = str(chord_data[2])
+                    confidence = 1.0  # Default confidence
+                else:
+                    print(f"[TASK {task_id}] Skipping invalid chord data format: {chord_data}")
+                    filtered_out_count += 1
+                    continue
+                
+                # Skip 'N' (no chord) detections
+                if chord_label == 'N':
+                    filtered_out_count += 1
+                    continue
+                
+                # Filter by confidence threshold
+                if confidence < min_confidence:
+                    print(f"[TASK {task_id}] Filtered out low confidence chord: {chord_label} at {start_time:.2f}s (confidence: {confidence:.3f} < {min_confidence})")
+                    filtered_out_count += 1
+                    continue
+                
+                # Calculate chord duration
+                chord_duration = end_time - start_time
+                
+                # Skip very short chord detections
+                if chord_duration < min_chord_duration:
+                    print(f"[TASK {task_id}] Filtered out short chord: {chord_label} at {start_time:.2f}s (duration: {chord_duration:.3f}s < {min_chord_duration}s)")
+                    filtered_out_count += 1
+                    continue
+                
+                # Convert madmom chord labels to our format
+                chord_name = convert_madmom_chord(chord_label)
+                
+                print(f"[TASK {task_id}] Processing chord: {chord_label} -> {chord_name} at {start_time:.2f}-{end_time:.2f}s (confidence: {confidence:.3f})")
+                
+                valid_chords.append({
+                    'start_time': start_time,
+                    'end_time': end_time,
+                    'chord': chord_name,
+                    'confidence': confidence,
+                    'duration': chord_duration
+                })
+                
+            except Exception as e:
+                print(f"[TASK {task_id}] Error processing chord data {chord_data}: {e}")
+                filtered_out_count += 1
+                continue
+        
+        print(f"[TASK {task_id}] Successfully processed {len(valid_chords)} chord segments (filtered out {filtered_out_count})")
+        
+        if not valid_chords:
+            raise RuntimeError("No valid chords detected. This could indicate an issue with the audio file or chord detection.")
+        
+        # Sort by start time
+        valid_chords.sort(key=lambda x: x['start_time'])
+        
+        # Step 4.5: Beat detection and chord alignment
+        print(f"\n=== [TASK {task_id}] STEP 4.5: BEAT DETECTION AND ALIGNMENT ===")
+        tasks[task_id]['step'] = 'Detecting beats and aligning chords'
+        tasks[task_id]['progress'] = 50
+        print(f"[TASK {task_id}] Progress: 50% - Beat detection and alignment")
+        
+        # Detect beats
+        beats = detect_beats(instrumental_wav_path, task_id)
+        
+        # Align chords to beats
+        if beats is not None:
+            valid_chords = align_chords_to_beats(valid_chords, beats, task_id)
+        
+        # Apply smoothing and timing optimization for speech synthesis
+        print(f"[TASK {task_id}] Applying chord smoothing and timing optimization...")
+        
+        # Apply median filtering to reduce rapid switching
+        window_size = 2
+        smoothed_chords = []
+        
+        for i in range(len(valid_chords)):
+            # Get window of chords around current position
+            start_idx = max(0, i - window_size // 2)
+            end_idx = min(len(valid_chords), i + window_size // 2 + 1)
+            window = valid_chords[start_idx:end_idx]
             
-            tasks[task_id]['progress'] = chord_progress
-            tasks[task_id]['step'] = f'Synthesizing chord {i+1}/{len(unique_chords)}'
-            print(f"[TASK {task_id}] Progress: {chord_progress}% - Synthesizing chord {i+1}/{len(unique_chords)}: {chord_speech}")
+            # Find most common chord in window
+            chord_counts = {}
+            for chord_info in window:
+                chord = chord_info['chord']
+                chord_counts[chord] = chord_counts.get(chord, 0) + 1
             
-            tts_output_path = os.path.join(task_dir, f'tts_{chord_speech.replace(" ", "_").replace("#", "sharp")}.wav')
-            if not synthesize_chord_speech(chord_speech, voice_sample_path, tts_output_path):
-                error_msg = f"TTS synthesis failed for chord: {chord_speech}"
-                print(f"ERROR: {error_msg}")
-                raise RuntimeError(error_msg)
-            if os.path.exists(tts_output_path):
-                tts_cache[chord_speech] = AudioSegment.from_wav(tts_output_path)
-                print(f"Loaded TTS for '{chord_speech}': {len(tts_cache[chord_speech])}ms duration")
+            # Use the most common chord in the window
+            most_common_chord = max(chord_counts.items(), key=lambda x: x[1])[0]
+            
+            # Only add if it's different from the last added chord
+            if not smoothed_chords or most_common_chord != smoothed_chords[-1]['chord']:
+                smoothed_chords.append({
+                    'time': valid_chords[i]['start_time'],
+                    'chord': most_common_chord,
+                    'speech': chord_to_ipa_phonemes(most_common_chord),
+                    'confidence': valid_chords[i]['confidence'],
+                    'duration': valid_chords[i]['duration']
+                })
+        
+        # Final pass: ensure minimum time between chord changes
+        final_chords = []
+        for chord_info in smoothed_chords:
+            if not final_chords or (chord_info['time'] - final_chords[-1]['time']) >= min_time_between_chords:
+                final_chords.append(chord_info)
             else:
-                error_msg = f"TTS output file not created for chord: {chord_speech}"
-                print(f"ERROR: {error_msg}")
-                raise RuntimeError(error_msg)
+                print(f"[TASK {task_id}] Filtered out rapid chord change: {chord_info['chord']} at {chord_info['time']:.2f}s (too close to previous)")
         
-        # 5. Audio Mixing
-        print(f"Step 5: Audio Mixing for task {task_id}")
-        tasks[task_id]['step'] = 'Audio Mixing'
-        tasks[task_id]['progress'] = 85
-        print(f"[TASK {task_id}] Progress: 85% - Starting audio mixing")
+        print(f"[TASK {task_id}] Final result: {len(final_chords)} chord changes")
+        for chord_info in final_chords:
+            print(f"[TASK {task_id}]   {chord_info['chord']} at {chord_info['time']:.2f}s")
         
-        # Create a new WAV file for the final output
-        final_wav_path = os.path.join(task_dir, 'final.wav')
+        # Update progress: Chord detection complete (65%)
+        if task_id and task_id in tasks:
+            tasks[task_id]['step'] = 'Analyzing chord pattern (complete)'
+            tasks[task_id]['progress'] = 65
+            print(f"[TASK {task_id}] Progress: 65% - Chord detection and processing complete")
         
-        # Initialize AudioSegment.empty()
-        final_audio_segment = AudioSegment.empty()
-        
-        # Add silence before the first chord
-        if chords and chords[0]['time'] > 0:
-            silence_duration = chords[0]['time'] * 1000
-            final_audio_segment += AudioSegment.silent(duration=int(silence_duration))
-        
-        # Add synthesized chord segments
-        for chord_data in chords:
-            chord_speech = chord_data['speech']
-            if chord_speech in tts_cache:
-                speech_audio = tts_cache[chord_speech]
-                final_audio_segment += speech_audio
-                print(f"Added '{chord_speech}' at {chord_data['time']:.2f}s: {len(speech_audio)}ms duration")
-            else:
-                # Fallback if TTS cache is missing (shouldn't happen if previous steps succeed)
-                print(f"Warning: TTS cache missing for chord: {chord_speech}. Using fallback beep.")
-                final_audio_segment += AudioSegment.sine(frequency=440, duration=200) # Fallback beep
-        
-        # Add silence after the last chord
-        if chords and chords[-1]['time'] < 1000: # Assuming instrumental duration is at least 1 second
-            silence_duration = (1000 - chords[-1]['time']) * 1000
-            final_audio_segment += AudioSegment.silent(duration=int(silence_duration))
-        
-        # Export to WAV
-        final_audio_segment.export(final_wav_path, format='wav')
-        
-        # Log audio mixing progress
-        log_debug(task_id, f"Audio mixing complete. Final WAV: {final_wav_path}")
-        
-        # 6. Convert WAV to MP3 (optional, but good for web)
-        print(f"Step 6: Convert WAV to MP3 for task {task_id}")
-        tasks[task_id]['step'] = 'Converting to MP3'
-        tasks[task_id]['progress'] = 90
-        print(f"[TASK {task_id}] Progress: 90% - Converting to MP3")
-        
-        final_mp3_path = os.path.join(task_dir, 'final.mp3')
-        final_audio_segment.export(final_mp3_path, format='mp3')
-        
-        # Log final conversion progress
-        log_debug(task_id, f"Final conversion complete. MP3: {final_mp3_path}")
-        
-        # Complete the task
-        total_time = time.time() - tts_start
-        tasks[task_id]['status'] = 'completed'
-        tasks[task_id]['step'] = 'Complete'
-        tasks[task_id]['progress'] = 100
-        tasks[task_id]['output_file'] = final_mp3_path
-        print(f"\n=== [TASK {task_id}] PROCESSING COMPLETED ===")
-        print(f"[TASK {task_id}] Progress: 100% - Processing completed successfully")
-        print(f"[TASK {task_id}] Total processing time: {total_time:.2f} seconds ({total_time/60:.2f} minutes)")
-        print(f"[TASK {task_id}] Output file: {final_mp3_path}")
+        return final_chords
         
     except Exception as e:
-        print(f"\n=== [TASK {task_id}] PROCESSING ERROR ===")
-        print(f"[TASK {task_id}] ERROR: {e}")
+        print(f"[TASK {task_id}] ERROR in chord detection: {e}")
         import traceback
         traceback.print_exc()
-        tasks[task_id]['status'] = 'error'
-        tasks[task_id]['error'] = str(e)
-        tasks[task_id]['step'] = f'Error: {str(e)}'
-        print(f"[TASK {task_id}] Processing error for task {task_id}: {e}")
-    finally:
-        # Clean up temporary files
-        if os.path.exists(file_path):
-            os.remove(file_path)
-            print(f"Deleted uploaded file: {file_path}")
-        if os.path.exists(instrumental_path):
-            os.remove(instrumental_path)
-            print(f"Deleted instrumental track: {instrumental_path}")
-        if os.path.exists(voice_sample_path):
-            os.remove(voice_sample_path)
-            print(f"Deleted voice sample: {voice_sample_path}")
-        if os.path.exists(final_wav_path):
-            os.remove(final_wav_path)
-            print(f"Deleted final WAV: {final_wav_path}")
-        if os.path.exists(final_mp3_path):
-            os.remove(final_mp3_path)
-            print(f"Deleted final MP3: {final_mp3_path}")
-        print(f"Cleaned up temporary files for task {task_id}")
+        raise RuntimeError(f"Chord detection failed: {e}")
 
 if __name__ == '__main__':
     import os
