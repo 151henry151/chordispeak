@@ -58,7 +58,7 @@ def create_chord_detector():
         raise RuntimeError(f"Failed to create chord detector: {e}")
 
 def detect_chords_simple(audio_file, task_id=None):
-    """Simple chord detection using madmom's standard approach"""
+    """Simple chord detection using madmom's standard approach with robust audio loading"""
     print(f"[TASK {task_id}] Starting simple chord detection")
     
     # Apply compatibility patches
@@ -75,12 +75,53 @@ def detect_chords_simple(audio_file, task_id=None):
         detector = DeepChromaChordRecognitionProcessor()
         print(f"[TASK {task_id}] Chord detector created successfully")
         
-        # Process audio file
-        print(f"[TASK {task_id}] Processing audio file: {audio_file}")
-        chords = detector(audio_file)
+        # Load audio with librosa first to ensure proper numeric data
+        print(f"[TASK {task_id}] Loading audio with librosa: {audio_file}")
+        import librosa
+        y, sr = librosa.load(audio_file, sr=44100, mono=True, dtype=np.float32)
         
-        print(f"[TASK {task_id}] Chord detection completed: {len(chords)} segments")
-        return chords
+        # Validate audio data
+        if y.dtype.kind in ['U', 'S']:
+            raise RuntimeError("Audio data contains strings instead of numeric data")
+        
+        if np.any(np.isnan(y)) or np.any(np.isinf(y)):
+            print(f"[TASK {task_id}] Cleaning NaN/Inf values from audio data")
+            y = np.nan_to_num(y, nan=0.0, posinf=1.0, neginf=-1.0)
+        
+        # Normalize audio
+        if np.max(np.abs(y)) > 1.0:
+            y = y / np.max(np.abs(y))
+        
+        # Ensure audio is contiguous
+        y = np.ascontiguousarray(y, dtype=np.float32)
+        
+        print(f"[TASK {task_id}] Audio loaded successfully: shape={y.shape}, sr={sr}, dtype={y.dtype}")
+        
+        # Create a temporary WAV file with the cleaned audio
+        import tempfile
+        import soundfile as sf
+        
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
+            temp_wav_path = temp_file.name
+        
+        # Save cleaned audio to temporary WAV file
+        sf.write(temp_wav_path, y, sr, subtype='PCM_16')
+        print(f"[TASK {task_id}] Created temporary WAV file: {temp_wav_path}")
+        
+        try:
+            # Process with madmom using the temporary file
+            print(f"[TASK {task_id}] Processing with madmom...")
+            chords = detector(temp_wav_path)
+            
+            print(f"[TASK {task_id}] Chord detection completed: {len(chords)} segments")
+            return chords
+            
+        finally:
+            # Clean up temporary file
+            import os
+            if os.path.exists(temp_wav_path):
+                os.unlink(temp_wav_path)
+                print(f"[TASK {task_id}] Cleaned up temporary file")
         
     except Exception as e:
         print(f"[TASK {task_id}] Error in chord detection: {e}")
