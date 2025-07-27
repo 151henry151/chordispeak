@@ -1,0 +1,27 @@
+# Quick deployment for static file updates only
+FROM python:3.11-slim
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Set work directory
+WORKDIR /app
+
+# Install minimal dependencies for static file serving
+RUN pip install flask flask-cors gunicorn
+
+# Copy only the static files and minimal app
+COPY index.html .
+COPY *.png .
+COPY *.ico .
+COPY app_simple.py .
+
+# Set the port for Cloud Run
+ENV PORT=8080
+
+# Expose the port
+EXPOSE 8080
+
+# Run the simple Flask app with Gunicorn
+CMD gunicorn -b 0.0.0.0:$PORT app_simple:app 

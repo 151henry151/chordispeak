@@ -785,15 +785,6 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
             else:
                 print(f"[TASK {task_id}] Warning: Could not determine madmom version")
             
-            # Check what processors are actually available
-            try:
-                from madmom.features.chords import DeepChromaProcessor
-                print(f"[TASK {task_id}] DeepChromaProcessor is available")
-                chroma_processor_available = True
-            except ImportError:
-                print(f"[TASK {task_id}] DeepChromaProcessor not available, using single-step approach")
-                chroma_processor_available = False
-            
             # Initialize madmom processors with recommended parameters
             # Step 1: Chroma feature extraction
             if chroma_processor_available:
@@ -1011,16 +1002,7 @@ def index():
 def serve_logo():
     """Serve the logo image"""
     try:
-        # Try the main logo file first
-        if os.path.exists('Logo-transparent.png'):
-            return send_file('Logo-transparent.png', mimetype='image/png')
-        elif os.path.exists('Logo-transparent-final.png'):
-            return send_file('Logo-transparent-final.png', mimetype='image/png')
-        elif os.path.exists('Logo.png'):
-            return send_file('Logo.png', mimetype='image/png')
-        else:
-            print("No logo file found")
-            return "Logo not found", 404
+        return send_file('Logo-transparent.png', mimetype='image/png')
     except Exception as e:
         print(f"Error serving Logo-transparent.png: {e}")
         return f"Error: {str(e)}", 500
@@ -1029,18 +1011,7 @@ def serve_logo():
 def serve_logo_transparent():
     """Serve the transparent logo image"""
     try:
-        # Try the main logo file first
-        if os.path.exists('Logo-transparent.png'):
-            return send_file('Logo-transparent.png', mimetype='image/png')
-        elif os.path.exists('Logo-transparent-final.png'):
-            return send_file('Logo-transparent-final.png', mimetype='image/png')
-        elif os.path.exists('Logo-transparent-inverted.png'):
-            return send_file('Logo-transparent-inverted.png', mimetype='image/png')
-        elif os.path.exists('Logo.png'):
-            return send_file('Logo.png', mimetype='image/png')
-        else:
-            print("No logo file found")
-            return "Logo not found", 404
+        return send_file('Logo-transparent.png', mimetype='image/png')
     except Exception as e:
         print(f"Error serving Logo-transparent.png: {e}")
         return f"Error: {str(e)}", 500
@@ -1052,15 +1023,6 @@ def serve_favicon_ico():
         return send_file('favicon.ico', mimetype='image/x-icon')
     except Exception as e:
         print(f"Error serving favicon.ico: {e}")
-        return f"Error: {str(e)}", 500
-
-@app.route('/Logo-transparent-inverted.png')
-def serve_logo_transparent_inverted():
-    """Serve the inverted transparent logo image"""
-    try:
-        return send_file('Logo-transparent-inverted.png', mimetype='image/png')
-    except Exception as e:
-        print(f"Error serving Logo-transparent-inverted.png: {e}")
         return f"Error: {str(e)}", 500
 
 @app.route('/favicon.png')
