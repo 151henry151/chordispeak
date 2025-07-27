@@ -493,34 +493,14 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
             else:
                 print(f"[TASK {task_id}] Warning: Could not determine madmom version")
             
-            # Initialize with default parameters to avoid type issues
-            # Try to use a more basic configuration first
+            # Initialize madmom chord detection processor
+            # According to documentation, use the standard processor
             try:
-                # Check madmom version and apply version-specific fixes
-                madmom_version = madmom.__version__ if hasattr(madmom, '__version__') else 'unknown'
-                print(f"[TASK {task_id}] Madmom version: {madmom_version}")
-                
-                # Try different initialization approaches based on version
-                if madmom_version.startswith('0.16'):
-                    # Version 0.16.x - try with explicit parameters
-                    chord_detector = DeepChromaChordRecognitionProcessor()
-                    print(f"[TASK {task_id}] Madmom processor initialized successfully")
-                else:
-                    # Try with minimal configuration
-                    chord_detector = DeepChromaChordRecognitionProcessor()
-                    print(f"[TASK {task_id}] Madmom processor initialized successfully")
-                    
+                chord_detector = DeepChromaChordRecognitionProcessor()
+                print(f"[TASK {task_id}] Madmom processor initialized successfully")
             except Exception as init_error:
                 print(f"[TASK {task_id}] ERROR initializing DeepChromaChordRecognitionProcessor: {init_error}")
-                # Try alternative initialization
-                try:
-                    from madmom.features.chords import DeepChromaProcessor
-                    chroma_processor = DeepChromaProcessor()
-                    chord_detector = chroma_processor
-                    print(f"[TASK {task_id}] Using alternative madmom processor")
-                except Exception as alt_init_error:
-                    print(f"[TASK {task_id}] Alternative processor also failed: {alt_init_error}")
-                    raise RuntimeError(f"Failed to initialize any madmom processor: {init_error}")
+                raise RuntimeError(f"Failed to initialize madmom processor: {init_error}")
         except Exception as e:
             print(f"[TASK {task_id}] ERROR initializing madmom processor: {e}")
             import traceback
@@ -577,22 +557,10 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
                 print(f"[TASK {task_id}] Audio file path: {audio_file}")
                 print(f"[TASK {task_id}] Audio file type: {type(audio_file)}")
                 
-                # Try to load audio with madmom's own loader first
-                from madmom.audio.signal import Signal
-                try:
-                    signal = Signal(audio_file)
-                    print(f"[TASK {task_id}] Madmom signal loaded: shape={signal.shape}, dtype={signal.dtype}")
-                    
-                    # Check for string data in signal
-                    if hasattr(signal, 'dtype') and signal.dtype.kind in ['U', 'S']:
-                        print(f"[TASK {task_id}] ERROR: Signal contains string data! dtype={signal.dtype}")
-                        raise RuntimeError("Signal contains string data")
-                    
-                    chords = chord_detector(signal)
-                except Exception as signal_error:
-                    print(f"[TASK {task_id}] Madmom signal loading failed: {signal_error}")
-                    # Fall back to file path
-                    chords = chord_detector(audio_file)
+                # According to madmom documentation, pass the file path directly
+                # The processor handles audio loading internally
+                print(f"[TASK {task_id}] Calling chord_detector with file path...")
+                chords = chord_detector(audio_file)
                 
                 print(f"[TASK {task_id}] Chord detection completed successfully")
             except Exception as chord_error:
@@ -650,8 +618,10 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
             # Fix data type issues in madmom output
             if chords is not None and len(chords) > 0:
                 print(f"[TASK {task_id}] Processing {len(chords)} chord segments from madmom")
+                print(f"[TASK {task_id}] First chord data type: {type(chords[0])}")
+                print(f"[TASK {task_id}] First chord data: {chords[0]}")
+                
                 # Convert chords to proper format and handle data type issues
-                processed_chords = []
                 for i, chord_data in enumerate(chords):
                     try:
                         # Ensure chord_data is properly formatted
@@ -740,8 +710,7 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
                         filtered_out_count += 1
                         continue
                 
-                chords = processed_chords
-                print(f"[TASK {task_id}] Successfully processed {len(chords)} chord segments")
+                print(f"[TASK {task_id}] Successfully processed {len(valid_chords)} chord segments")
             else:
                 print(f"[TASK {task_id}] No chords detected by madmom")
                 raise RuntimeError("Madmom detected no chords. This could indicate an issue with the audio file or chord detection.")
