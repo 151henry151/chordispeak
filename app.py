@@ -576,6 +576,15 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
                 
                 chords = processed_chords
                 print(f"[TASK {task_id}] Successfully processed {len(chords)} chord segments")
+            else:
+                print(f"[TASK {task_id}] No chords detected by madmom")
+                raise RuntimeError("Madmom detected no chords. This could indicate an issue with the audio file or chord detection.")
+        except Exception as e:
+            print(f"[TASK {task_id}] ERROR in chord detection: {e}")
+            import traceback
+            traceback.print_exc()
+            raise RuntimeError(f"Chord detection failed: {e}")
+        
         print(f"After filtering: {len(valid_chords)} valid chord segments (filtered out {filtered_out_count})")
         
         # Update progress: Starting chord smoothing (60-65%)
