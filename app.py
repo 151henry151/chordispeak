@@ -1736,9 +1736,16 @@ def process_audio_task(task_id, file_path):
         if not os.path.exists(instrumental_path):
             raise RuntimeError(f"Instrumental track not found after Demucs separation. Expected: {instrumental_path}")
         
+        # Convert MP3 to WAV for chord detection
+        instrumental_wav_path = os.path.join(task_dir, 'instrumental_track.wav')
+        from pydub import AudioSegment
+        instrumental_audio = AudioSegment.from_mp3(instrumental_path)
+        instrumental_audio.export(instrumental_wav_path, format='wav')
+        print(f"[TASK {task_id}] Converted instrumental to WAV: {instrumental_wav_path}")
+        
         # Use the madmom compatibility layer
         from madmom_compat import detect_chords_simple
-        chords = detect_chords_simple(instrumental_path, task_id)
+        chords = detect_chords_simple(instrumental_wav_path, task_id)
         
         if not chords or len(chords) == 0:
             raise RuntimeError("No chords detected. This could indicate an issue with the audio file or chord detection.")
