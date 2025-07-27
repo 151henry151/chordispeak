@@ -1653,8 +1653,6 @@ def process_audio_task(task_id, file_path):
         print(f"[TASK {task_id}] Progress: 15% - Starting vocal separation")
         
         task_dir = os.path.dirname(input_path)
-        vocal_path = os.path.join(task_dir, 'vocal_track.wav')
-        instrumental_path = os.path.join(task_dir, 'instrumental_track.wav')
         
         # Run Demucs separation
         demucs_cmd = [
@@ -1696,14 +1694,36 @@ def process_audio_task(task_id, file_path):
         tasks[task_id]['progress'] = 35
         print(f"[TASK {task_id}] Progress: 35% - Extracting voice sample")
         
+        # Find Demucs output files
+        demucs_output_dir = os.path.join(task_dir, 'htdemucs')
+        if not os.path.exists(demucs_output_dir):
+            raise RuntimeError("Demucs output directory not found")
+        
+        # Look for the input subdirectory
+        input_subdir = None
+        for item in os.listdir(demucs_output_dir):
+            item_path = os.path.join(demucs_output_dir, item)
+            if os.path.isdir(item_path):
+                input_subdir = item_path
+                break
+        
+        if not input_subdir:
+            raise RuntimeError("Demucs input subdirectory not found")
+        
+        # Define paths for vocal and instrumental files
+        vocal_path = os.path.join(input_subdir, 'vocals.mp3')
+        instrumental_path = os.path.join(input_subdir, 'no_vocals.mp3')
+        
         voice_sample_path = os.path.join(task_dir, 'voice_sample.wav')
         
         # Check if vocal file exists
         if not os.path.exists(vocal_path):
-            raise RuntimeError("Vocal track not found after Demucs separation")
+            raise RuntimeError(f"Vocal track not found after Demucs separation. Expected: {vocal_path}")
         
-        # Use the full vocal track for voice cloning
-        shutil.copy2(vocal_path, voice_sample_path)
+        # Convert MP3 to WAV for voice cloning
+        from pydub import AudioSegment
+        vocal_audio = AudioSegment.from_mp3(vocal_path)
+        vocal_audio.export(voice_sample_path, format='wav')
         print(f"[TASK {task_id}] Voice sample extracted: {voice_sample_path}")
         
         # Step 4: Chord detection
@@ -1714,7 +1734,7 @@ def process_audio_task(task_id, file_path):
         
         # Check if instrumental file exists
         if not os.path.exists(instrumental_path):
-            raise RuntimeError("Instrumental track not found after Demucs separation")
+            raise RuntimeError(f"Instrumental track not found after Demucs separation. Expected: {instrumental_path}")
         
         # Use the madmom compatibility layer
         from madmom_compat import detect_chords_simple
