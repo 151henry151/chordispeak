@@ -447,7 +447,7 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
             print(f"[TASK {task_id}] Could not get audio file info with soundfile: {e}")
         
         # Get audio duration for progress estimation
-        y, sr = librosa.load(audio_file, sr=None, mono=True)
+        y, sr = librosa.load(audio_file, sr=None, mono=True, dtype=np.float32)
         audio_duration = len(y) / sr
         print(f"[TASK {task_id}] librosa: duration={audio_duration:.2f}s, sr={sr}, shape={y.shape}, dtype={y.dtype}")
         
@@ -456,17 +456,68 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
             print(f"[TASK {task_id}] Converting audio dtype from {y.dtype} to float32")
             y = y.astype(np.float32)
         
+        # Additional NumPy compatibility fixes for madmom
+        print(f"[TASK {task_id}] Applying NumPy compatibility fixes...")
+        if not hasattr(np, 'float'):
+            np.float = float
+        if not hasattr(np, 'int'):
+            np.int = int
+        if not hasattr(np, 'complex'):
+            np.complex = complex
+        
+        # Ensure audio is properly formatted for madmom
+        print(f"[TASK {task_id}] Preparing audio for madmom processing...")
+        # Normalize audio to prevent overflow issues
+        if np.max(np.abs(y)) > 1.0:
+            y = y / np.max(np.abs(y))
+        
+        # Ensure audio is contiguous in memory
+        y = np.ascontiguousarray(y, dtype=np.float32)
+        
         # Initialize madmom chord detection using the correct approach
         print(f"[TASK {task_id}] Initializing madmom processor...")
         try:
-            chord_detector = DeepChromaChordRecognitionProcessor()
-            print(f"[TASK {task_id}] Madmom processor initialized successfully")
+            # Add debug info about madmom version and dependencies
+            import madmom
+            print(f"[TASK {task_id}] Madmom version: {madmom.__version__}")
+            
+            # Check NumPy version compatibility
+            print(f"[TASK {task_id}] NumPy version: {np.__version__}")
+            print(f"[TASK {task_id}] Librosa version: {librosa.__version__}")
+            
+            # Check for known compatibility issues
+            if hasattr(madmom, '__version__') and madmom.__version__:
+                print(f"[TASK {task_id}] Madmom version check completed")
+            else:
+                print(f"[TASK {task_id}] Warning: Could not determine madmom version")
+            
+            # Initialize with default parameters to avoid type issues
+            # Try to use a more basic configuration first
+            try:
+                chord_detector = DeepChromaChordRecognitionProcessor()
+                print(f"[TASK {task_id}] Madmom processor initialized successfully")
+            except Exception as init_error:
+                print(f"[TASK {task_id}] ERROR initializing DeepChromaChordRecognitionProcessor: {init_error}")
+                # Try alternative initialization
+                from madmom.features.chords import DeepChromaProcessor
+                chroma_processor = DeepChromaProcessor()
+                chord_detector = chroma_processor
+                print(f"[TASK {task_id}] Using alternative madmom processor")
         except Exception as e:
             print(f"[TASK {task_id}] ERROR initializing madmom processor: {e}")
+            import traceback
+            traceback.print_exc()
             raise RuntimeError(f"Failed to initialize madmom processor: {e}")
         
         # Start timing for progress estimation
         start_time = time.time()
+        
+        # Initialize variables for chord processing
+        filtered_out_count = 0
+        min_confidence = 0.2  # Minimum confidence threshold
+        min_chord_duration = 0.2  # Minimum chord duration in seconds
+        min_time_between_chords = 0.3  # Minimum time between chord changes
+        valid_chords = []
         
         # Update progress: Starting chord detection (40-50%)
         if task_id and task_id in tasks:
@@ -478,8 +529,83 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
         print(f"[TASK {task_id}] Starting chord detection...")
         try:
             print(f"[TASK {task_id}] Calling chord_detector with audio_file: {audio_file}")
-            chords = chord_detector(audio_file)
-            print(f"[TASK {task_id}] Chord detection completed successfully")
+            # Add debug info about the audio file
+            import os
+            if os.path.exists(audio_file):
+                file_size = os.path.getsize(audio_file)
+                print(f"[TASK {task_id}] Audio file size: {file_size} bytes")
+                
+                # Check if file is not empty
+                if file_size == 0:
+                    print(f"[TASK {task_id}] ERROR: Audio file is empty!")
+                    raise RuntimeError("Audio file is empty")
+                
+                # Try to validate the audio file format
+                try:
+                    import soundfile as sf
+                    info = sf.info(audio_file)
+                    print(f"[TASK {task_id}] Audio file format: {info.format}, subtype: {info.subtype}")
+                    if info.duration <= 0:
+                        print(f"[TASK {task_id}] ERROR: Audio file has zero duration!")
+                        raise RuntimeError("Audio file has zero duration")
+                except Exception as sf_error:
+                    print(f"[TASK {task_id}] Warning: Could not validate audio file with soundfile: {sf_error}")
+            else:
+                print(f"[TASK {task_id}] ERROR: Audio file does not exist: {audio_file}")
+                raise RuntimeError(f"Audio file not found: {audio_file}")
+            
+            try:
+                # Debug: Check what madmom is receiving
+                print(f"[TASK {task_id}] Audio file path: {audio_file}")
+                print(f"[TASK {task_id}] Audio file type: {type(audio_file)}")
+                
+                # Try to load audio with madmom's own loader first
+                from madmom.audio.signal import Signal
+                try:
+                    signal = Signal(audio_file)
+                    print(f"[TASK {task_id}] Madmom signal loaded: shape={signal.shape}, dtype={signal.dtype}")
+                    chords = chord_detector(signal)
+                except Exception as signal_error:
+                    print(f"[TASK {task_id}] Madmom signal loading failed: {signal_error}")
+                    # Fall back to file path
+                    chords = chord_detector(audio_file)
+                
+                print(f"[TASK {task_id}] Chord detection completed successfully")
+            except Exception as chord_error:
+                print(f"[TASK {task_id}] ERROR during chord detection call: {chord_error}")
+                import traceback
+                traceback.print_exc()
+                # Try to provide more specific error information
+                if "ufunc 'multiply'" in str(chord_error):
+                    print(f"[TASK {task_id}] This appears to be a NumPy type mismatch error. Checking audio data types...")
+                    print(f"[TASK {task_id}] Error details: {chord_error}")
+                    
+                    # Check if the issue is with string data being passed
+                    if "dtype('<U1')" in str(chord_error) or "dtype('<U32')" in str(chord_error):
+                        print(f"[TASK {task_id}] ERROR: String data detected in audio processing!")
+                        print(f"[TASK {task_id}] This suggests madmom is receiving string data instead of numeric data.")
+                        
+                        # Try to reload the audio with explicit dtype and ensure it's numeric
+                        try:
+                            y, sr = librosa.load(audio_file, sr=None, mono=True, dtype=np.float32)
+                            print(f"[TASK {task_id}] Reloaded audio with float32: shape={y.shape}, dtype={y.dtype}")
+                            
+                            # Verify the data is numeric
+                            if not np.issubdtype(y.dtype, np.number):
+                                print(f"[TASK {task_id}] ERROR: Audio data is not numeric! dtype={y.dtype}")
+                                raise RuntimeError("Audio data contains non-numeric values")
+                            
+                            # Try chord detection again with the reloaded audio
+                            chords = chord_detector(audio_file)
+                            print(f"[TASK {task_id}] Chord detection succeeded after reloading audio")
+                        except Exception as retry_error:
+                            print(f"[TASK {task_id}] Retry also failed: {retry_error}")
+                            raise RuntimeError(f"Chord detection failed after retry: {retry_error}")
+                    else:
+                        print(f"[TASK {task_id}] Unknown NumPy type mismatch. Trying alternative approach...")
+                        raise RuntimeError(f"Chord detection failed: {chord_error}")
+                else:
+                    raise RuntimeError(f"Chord detection failed: {chord_error}")
             
             # Fix data type issues in madmom output
             if chords is not None and len(chords) > 0:
@@ -636,6 +762,9 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
                     print(f"Filtered out rapid chord change: {chord_info['chord']} at {chord_info['time']:.2f}s (too close to previous)")
             
             chords_with_timing = final_chords
+        else:
+            # If no valid chords were found, create an empty list
+            chords_with_timing = []
         
         # Update progress: Chord detection complete (65%)
         if task_id and task_id in tasks:
