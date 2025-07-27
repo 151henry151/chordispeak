@@ -931,7 +931,6 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
                 print(f"ERROR: {error_msg}")
                 raise RuntimeError(error_msg)
             if os.path.exists(tts_output_path):
-                from pydub import AudioSegment
                 tts_cache[chord_speech] = AudioSegment.from_wav(tts_output_path)
                 print(f"Loaded TTS for '{chord_speech}': {len(tts_cache[chord_speech])}ms duration")
             else:
@@ -944,6 +943,7 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
         tasks[task_id]['step'] = 'Creating chord audio track'
         tasks[task_id]['progress'] = 85
         print(f"[TASK {task_id}] Progress: 85% - Creating chord audio track")
+        from pydub import AudioSegment
         chord_audio_segments = []
         for i, chord_data in enumerate(chords):
             if i == 0:
@@ -969,7 +969,8 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
         tasks[task_id]['step'] = 'Overlaying spoken chords onto instrumental track'
         tasks[task_id]['progress'] = 90
         print(f"[TASK {task_id}] Progress: 90% - Mixing final audio")
-        instrumental_audio = AudioSegment.from_wav(instrumental_path)
+        # Use the WAV version that was created for chord detection
+        instrumental_audio = AudioSegment.from_wav(instrumental_wav_path)
         if len(chord_track) < len(instrumental_audio):
             chord_track += AudioSegment.silent(duration=len(instrumental_audio) - len(chord_track))
         elif len(chord_track) > len(instrumental_audio):
@@ -1959,7 +1960,8 @@ def process_audio_task(task_id, file_path):
         tasks[task_id]['step'] = 'Overlaying spoken chords onto instrumental track'
         tasks[task_id]['progress'] = 90
         print(f"[TASK {task_id}] Progress: 90% - Mixing final audio")
-        instrumental_audio = AudioSegment.from_wav(instrumental_path)
+        # Use the WAV version that was created for chord detection
+        instrumental_audio = AudioSegment.from_wav(instrumental_wav_path)
         if len(chord_track) < len(instrumental_audio):
             chord_track += AudioSegment.silent(duration=len(instrumental_audio) - len(chord_track))
         elif len(chord_track) > len(instrumental_audio):
