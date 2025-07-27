@@ -429,12 +429,12 @@ def synthesize_chord_speech(text, voice_sample_path, output_path):
 
 def detect_chords(audio_file, chord_types=None, task_id=None):
     """Detect chords from audio file using madmom for accurate chord recognition"""
-    print(f"[TASK {task_id}] Starting detect_chords function")
+    print(f"[TASK {task_id}] Starting chord detection")
     
     if not lazy_import_audio_deps():
         raise RuntimeError("Audio processing dependencies not available. Cannot perform chord detection.")
     
-    # Comprehensive audio file validation
+    # Validate audio file
     print(f"[TASK {task_id}] Validating audio file: {audio_file}")
     try:
         import os
@@ -450,17 +450,10 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
     except Exception as validation_error:
         print(f"[TASK {task_id}] Audio file validation failed: {validation_error}")
         raise RuntimeError(f"Audio file validation failed: {validation_error}")
-        
+    
     try:
-        import time
-        print(f"[TASK {task_id}] Importing madmom modules...")
-        from madmom.features.chords import DeepChromaChordRecognitionProcessor
-        print(f"[TASK {task_id}] Madmom modules imported successfully")
-        
-        # Initialize madmom chord detector
-        print(f"[TASK {task_id}] Initializing madmom chord detector...")
-        chord_detector = DeepChromaChordRecognitionProcessor()
-        print(f"[TASK {task_id}] Madmom chord detector initialized successfully")
+        # Import madmom compatibility layer
+        from madmom_compat import detect_chords_simple
         
         # Update progress: Starting chord detection (40-50%)
         if task_id and task_id in tasks:
@@ -468,13 +461,13 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
             tasks[task_id]['progress'] = 40
             print(f"[TASK {task_id}] Progress: 40% - Starting chord detection")
         
-        # Process the audio file with the chord detector
-        print(f"[TASK {task_id}] Starting chord detection...")
-        print(f"[TASK {task_id}] Audio file path: {audio_file}")
+        # Use madmom's standard chord detection
+        print(f"[TASK {task_id}] Using madmom chord detection...")
+        chords = detect_chords_simple(audio_file, task_id)
         
-        # Use madmom's native chord detection - pass file path directly
-        chords = chord_detector(audio_file)
-        print(f"[TASK {task_id}] Chord detection completed successfully")
+        if not chords or len(chords) == 0:
+            raise RuntimeError("No chords detected. This could indicate an issue with the audio file or chord detection.")
+        
         print(f"[TASK {task_id}] Raw madmom output: {len(chords)} chord segments")
         
         # Process madmom output format
