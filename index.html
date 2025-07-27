@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ChordiSpeak - AI Chord Vocal Generator</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon.png">
+    
     <style>
         * {
             margin: 0;
@@ -17,7 +22,7 @@
                 sans-serif;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #000000;
             min-height: 100vh;
         }
 
@@ -42,6 +47,21 @@
             font-weight: 700;
             margin-bottom: 0.5rem;
             text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .header-logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .logo-image {
+            width: 60px;
+            height: 60px;
+            object-fit: contain;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
         }
 
         .App-header p {
@@ -71,7 +91,7 @@
         }
 
         .upload-section h2 {
-            color: #333;
+            color: #000000;
             margin-bottom: 1.5rem;
             text-align: center;
             font-size: 1.8rem;
@@ -84,17 +104,17 @@
         .file-input {
             width: 100%;
             padding: 1rem;
-            border: 2px dashed #667eea;
+            border: 2px dashed #000000;
             border-radius: 10px;
-            background: rgba(102, 126, 234, 0.05);
+            background: rgba(0, 0, 0, 0.05);
             cursor: pointer;
             transition: all 0.3s ease;
             margin-bottom: 1rem;
         }
 
         .file-input:hover {
-            border-color: #764ba2;
-            background: rgba(102, 126, 234, 0.1);
+            border-color: #000000;
+            background: rgba(0, 0, 0, 0.1);
         }
 
         .file-input:disabled {
@@ -112,18 +132,18 @@
             justify-content: center;
             gap: 0.5rem;
             padding: 0.5rem;
-            background: rgba(102, 126, 234, 0.1);
+            background: rgba(0, 0, 0, 0.1);
             border-radius: 8px;
-            border: 1px solid rgba(102, 126, 234, 0.3);
+            border: 1px solid rgba(0, 0, 0, 0.3);
         }
 
         .file-name {
             font-weight: 600;
-            color: #333;
+            color: #000000;
         }
 
         .file-size {
-            color: #666;
+            color: #000000;
             font-size: 0.9rem;
         }
 
@@ -196,7 +216,7 @@
         }
 
         .progress-fill {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #000000;
             height: 100%;
             width: 0%;
             transition: width 0.3s ease;
@@ -210,19 +230,19 @@
         .progress-text {
             font-size: 1.1rem;
             font-weight: 600;
-            color: #333;
+            color: #000000;
             margin-bottom: 0.5rem;
         }
 
         .progress-percentage {
             font-size: 1.5rem;
             font-weight: 700;
-            color: #667eea;
+            color: #000000;
             margin-bottom: 0.5rem;
         }
 
         .progress-status {
-            color: #666;
+            color: #000000;
             font-size: 0.9rem;
         }
 
@@ -236,13 +256,13 @@
             margin: 0.5rem;
         }
 
-        .status-starting { background: #bee3f8; color: #2b6cb0; }
-        .status-processing { background: #fef5e7; color: #d69e2e; }
-        .status-completed { background: #c6f6d5; color: #38a169; }
-        .status-error { background: #fed7d7; color: #c53030; }
+        .status-starting { background: #000000; color: #ffffff; }
+        .status-processing { background: #000000; color: #ffffff; }
+        .status-completed { background: #000000; color: #ffffff; }
+        .status-error { background: #000000; color: #ffffff; }
 
         .patience-note {
-            color: #666;
+            color: #000000;
             font-size: 0.9rem;
             margin-bottom: 1.5rem;
             font-style: italic;
@@ -253,7 +273,7 @@
         }
 
         .cancel-button {
-            background: #e53e3e;
+            background: #000000;
             color: white;
             border: none;
             padding: 0.75rem 1.5rem;
@@ -265,7 +285,7 @@
         }
 
         .cancel-button:hover {
-            background: #c53030;
+            background: #000000;
             transform: translateY(-1px);
         }
 
@@ -276,7 +296,7 @@
         }
 
         .close-modal-button {
-            background: #38a169;
+            background: #000000;
             color: white;
             border: none;
             padding: 0.75rem 1.5rem;
@@ -289,37 +309,22 @@
         }
 
         .close-modal-button:hover {
-            background: #2f855a;
+            background: #000000;
             transform: translateY(-1px);
-        }
-
-        /* Debug Panel Styles */
-        .debug-panel {
-            margin-top: 1.5rem;
-            padding: 1rem;
-            background: #f8f9fa;
-            border-radius: 10px;
-            border: 1px solid #e9ecef;
-        }
-
-        .debug-panel h3 {
-            color: #333;
-            margin-bottom: 1rem;
-            font-size: 1.1rem;
         }
 
         /* Main Debug Section Styles */
         .debug-section {
             margin: 2rem 0;
             padding: 1.5rem;
-            background: #f8f9fa;
+            background: #ffffff;
             border-radius: 15px;
-            border: 1px solid #e9ecef;
+            border: 1px solid #000000;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
         }
 
         .debug-section h3 {
-            color: #333;
+            color: #000000;
             margin-bottom: 1rem;
             font-size: 1.3rem;
             display: flex;
@@ -328,8 +333,8 @@
         }
 
         .debug-logs-main {
-            background: #2d3748;
-            color: #e2e8f0;
+            background: #000000;
+            color: #ffffff;
             padding: 1rem;
             border-radius: 8px;
             font-family: 'Courier New', monospace;
@@ -343,7 +348,7 @@
         }
 
         .debug-toggle-main {
-            background: #667eea;
+            background: #000000;
             color: white;
             border: none;
             padding: 0.75rem 1.5rem;
@@ -355,13 +360,13 @@
         }
 
         .debug-toggle-main:hover {
-            background: #5a67d8;
+            background: #000000;
             transform: translateY(-1px);
         }
 
         .debug-logs {
-            background: #2d3748;
-            color: #e2e8f0;
+            background: #000000;
+            color: #ffffff;
             padding: 1rem;
             border-radius: 8px;
             font-family: 'Courier New', monospace;
@@ -374,7 +379,7 @@
         }
 
         .debug-toggle {
-            background: #4a5568;
+            background: #000000;
             color: white;
             border: none;
             padding: 0.5rem 1rem;
@@ -385,7 +390,7 @@
         }
 
         .debug-toggle:hover {
-            background: #2d3748;
+            background: #000000;
         }
 
         /* Action buttons */
@@ -410,13 +415,13 @@
         }
 
         .process-button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #000000;
             color: white;
         }
 
         .process-button:hover:not(:disabled) {
             transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
         }
 
         .process-button:disabled {
@@ -426,12 +431,14 @@
         }
 
         .reset-button {
-            background: #e2e8f0;
-            color: #4a5568;
+            background: #ffffff;
+            color: #000000;
+            border: 2px solid #000000;
         }
 
         .reset-button:hover {
-            background: #cbd5e0;
+            background: #000000;
+            color: #ffffff;
             transform: translateY(-2px);
         }
 
@@ -536,6 +543,15 @@
                 font-size: 2rem;
             }
 
+            .header-logo {
+                gap: 0.75rem;
+            }
+
+            .logo-image {
+                width: 50px;
+                height: 50px;
+            }
+
             .App-header p {
                 font-size: 1rem;
             }
@@ -578,6 +594,15 @@
 
             .App-header h1 {
                 font-size: 1.8rem;
+            }
+
+            .header-logo {
+                gap: 0.5rem;
+            }
+
+            .logo-image {
+                width: 40px;
+                height: 40px;
             }
 
             .upload-section h2,
@@ -806,12 +831,181 @@
         .chord-progression-display::-webkit-scrollbar-thumb:hover {
             background: #5a6fd8;
         }
+
+        /* Informational Section Styles */
+        .info-section {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 3rem 0;
+            margin-top: 2rem;
+        }
+
+        .info-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        .info-container h2 {
+            text-align: center;
+            color: white;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 3rem;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .info-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .info-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 2rem;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .info-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .card-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            display: block;
+        }
+
+        .info-card h3 {
+            color: #333;
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+
+        .info-card p {
+            color: #666;
+            line-height: 1.6;
+            font-size: 1rem;
+        }
+
+        /* Responsive design for info cards */
+        @media (max-width: 768px) {
+            .info-container h2 {
+                font-size: 2rem;
+            }
+
+            .info-cards {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+            }
+
+            .info-card {
+                padding: 1.5rem;
+            }
+
+            .card-icon {
+                font-size: 2.5rem;
+            }
+
+            .info-card h3 {
+                font-size: 1.3rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .info-container {
+                padding: 0 1rem;
+            }
+
+            .info-container h2 {
+                font-size: 1.8rem;
+            }
+
+            .info-card {
+                padding: 1.25rem;
+            }
+        }
+
+        /* GitHub Section Styles */
+        .github-section {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 2rem 0;
+            text-align: center;
+        }
+
+        .github-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        .github-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            background: rgba(255, 255, 255, 0.95);
+            color: #000000;
+            text-decoration: none;
+            padding: 1rem 2rem;
+            border-radius: 15px;
+            font-weight: 600;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .github-link:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+            background: #ffffff;
+        }
+
+        .github-icon {
+            font-size: 1.5rem;
+        }
+
+        /* Responsive design for GitHub section */
+        @media (max-width: 768px) {
+            .github-link {
+                padding: 0.875rem 1.5rem;
+                font-size: 1rem;
+            }
+
+            .github-icon {
+                font-size: 1.25rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .github-container {
+                padding: 0 1rem;
+            }
+
+            .github-link {
+                padding: 0.75rem 1.25rem;
+                font-size: 0.9rem;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="App">
         <header class="App-header">
-            <h1>🎵 ChordiSpeak</h1>
+            <div class="header-logo">
+                <img src="Logo.png" alt="ChordiSpeak Logo" class="logo-image">
+                <h1>ChordiSpeak</h1>
+            </div>
             <p>Upload a song and learn chord progressions by ear</p>
         </header>
 
@@ -870,15 +1064,6 @@
                     </div>
                     <div class="status-badge" id="statusBadge">Starting</div>
                     
-                    <!-- Debug Panel -->
-                    <div class="debug-panel" id="debugPanel" style="display: none;">
-                        <h3>🔍 Debug Logs</h3>
-                        <div class="debug-logs" id="debugLogs">
-                            <p>Loading debug logs...</p>
-                        </div>
-                        <button class="debug-toggle" id="debugToggle">📋 Show/Hide Debug</button>
-                    </div>
-                    
                     <div class="modal-actions">
                         <button class="cancel-button" id="cancelBtn">❌ Cancel</button>
                         <button class="close-modal-button" id="closeModalBtn" style="display: none;">🔒 Close Modal</button>
@@ -916,8 +1101,42 @@
 
         </main>
 
+        <!-- Informational Section -->
+        <section class="info-section">
+            <div class="info-container">
+                <h2>How ChordiSpeak Works</h2>
+                <div class="info-cards">
+                    <div class="info-card">
+                        <div class="card-icon">📁</div>
+                        <h3>Upload Your Song</h3>
+                        <p>Upload any audio file (MP3, WAV, FLAC, M4A) and our AI will process it to extract the instrumental and vocal tracks.</p>
+                    </div>
+                    <div class="info-card">
+                        <div class="card-icon">🎵</div>
+                        <h3>Chord Pattern is Detected</h3>
+                        <p>Advanced AI analyzes the instrumental track to identify chord progressions and their timing throughout the song.</p>
+                    </div>
+                    <div class="info-card">
+                        <div class="card-icon">🎤</div>
+                        <h3>Hear the Names of the Chords</h3>
+                        <p>Listen to a new version where chord names are spoken over the instrumental track, helping you learn by ear.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- GitHub Link Section -->
+        <section class="github-section">
+            <div class="github-container">
+                <a href="https://github.com/151henry151/chordispeak" target="_blank" rel="noopener noreferrer" class="github-link">
+                    <span class="github-icon">📂</span>
+                    <span>View on GitHub</span>
+                </a>
+            </div>
+        </section>
+
         <footer class="App-footer">
-            <p>by <a href="https://hromp.com" target="_blank" rel="noopener noreferrer">hromp.com</a></p>
+            <p>Created by <a href="https://hromp.com" target="_blank" rel="noopener noreferrer">hromp.com</a></p>
         </footer>
     </div>
 
@@ -944,9 +1163,6 @@
         const audioPlayer = document.getElementById('audioPlayer');
         const downloadBtn = document.getElementById('downloadBtn');
         const cancelBtn = document.getElementById('cancelBtn');
-        const debugPanel = document.getElementById('debugPanel');
-        const debugLogs = document.getElementById('debugLogs');
-        const debugToggle = document.getElementById('debugToggle');
         const closeModalBtn = document.getElementById('closeModalBtn');
         const mainDebugSection = document.getElementById('mainDebugSection');
         const mainDebugLogs = document.getElementById('mainDebugLogs');
@@ -1004,7 +1220,7 @@
         cancelBtn.addEventListener('click', handleCancelTask);
 
         // Debug toggle handling
-        debugToggle.addEventListener('click', toggleDebugPanel);
+        // debugToggle.addEventListener('click', toggleDebugPanel); // This line is removed
         debugToggleMain.addEventListener('click', toggleMainDebugSection);
 
         // Close modal button handling
@@ -1020,8 +1236,7 @@
             cancelBtn.textContent = '❌ Cancel';
             closeModalBtn.style.display = 'none';
             progressModal.classList.remove('show');
-            // Reset debug panel styling
-            debugPanel.style.border = '1px solid #e9ecef';
+            // Reset main debug section styling
             mainDebugSection.style.border = '1px solid #e9ecef';
             mainDebugSection.style.backgroundColor = '';
             mainDebugLogs.style.backgroundColor = '';
@@ -1108,13 +1323,11 @@
             // Hide close modal button for new processes
             closeModalBtn.style.display = 'none';
             // Clear previous debug logs
-            debugLogs.innerHTML = '<p>Debug logs will appear here during processing...</p>';
             mainDebugLogs.innerHTML = '<p>Debug logs will appear here during processing...</p>';
             // Show main debug section immediately
             mainDebugSection.style.display = 'block';
-            // Show debug panel after a few seconds
+            // Start debug polling after a few seconds
             setTimeout(() => {
-                debugPanel.style.display = 'block';
                 startDebugPolling();
             }, 3000);
         }
@@ -1208,10 +1421,6 @@
                             // DO NOT set isProcessing = false to keep modal open and polling active
                             // Show error but DO NOT reset or close modal
                             showError(status.message || 'Processing failed');
-                            // Show and highlight debug logs
-                            debugPanel.style.display = 'block';
-                            debugLogs.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            debugPanel.style.border = '2px solid #c53030';
                             // Show and highlight main debug section
                             mainDebugSection.style.display = 'block';
                             mainDebugSection.style.border = '3px solid #c53030';
@@ -1412,15 +1621,15 @@
         }
 
         // Debug functions
-        function toggleDebugPanel() {
-            if (debugPanel.style.display === 'none') {
-                debugPanel.style.display = 'block';
-                debugToggle.textContent = '📋 Hide Debug';
-            } else {
-                debugPanel.style.display = 'none';
-                debugToggle.textContent = '📋 Show Debug';
-            }
-        }
+        // function toggleDebugPanel() { // This function is removed
+        //     if (debugPanel.style.display === 'none') {
+        //         debugPanel.style.display = 'block';
+        //         debugToggle.textContent = '📋 Hide Debug';
+        //     } else {
+        //         debugPanel.style.display = 'none';
+        //         debugToggle.textContent = '📋 Show Debug';
+        //     }
+        // }
 
         function toggleMainDebugSection() {
             if (mainDebugSection.style.display === 'none') {
@@ -1457,16 +1666,11 @@
 
         function updateDebugLogs(logs) {
             if (!logs || logs.length === 0) {
-                debugLogs.innerHTML = '<p>No debug logs available yet...</p>';
                 mainDebugLogs.innerHTML = '<p>No debug logs available yet...</p>';
                 return;
             }
             
             const logText = logs.join('\n');
-            debugLogs.textContent = logText;
-            debugLogs.scrollTop = debugLogs.scrollHeight; // Auto-scroll to bottom
-            
-            // Also update main debug section
             mainDebugLogs.textContent = logText;
             mainDebugLogs.scrollTop = mainDebugLogs.scrollHeight; // Auto-scroll to bottom
         }

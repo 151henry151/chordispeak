@@ -4,7 +4,7 @@
 
 ChordiSpeak generates a new vocal track for your song that speaks the chord names in the original singer's voice, perfectly timed to the music.
 
-Note that this app is still in beta-testing and doesn't work fully yet. See or try out what we have so far at https://chordispeak-130612573310.us-east4.run.app/
+Note that this app is still in beta-testing and doesn't work fully yet. See or try out what we have so far at https://chordispeak-ao5zbahlha-uk.a.run.app/
 
 
 ## Features
