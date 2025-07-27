@@ -76,6 +76,8 @@ def lazy_import_audio_deps():
                 np.float = float
             if not hasattr(np, 'int'):
                 np.int = int
+            if not hasattr(np, 'complex'):
+                np.complex = complex
                 
         except ImportError as e:
             print(f"Warning: Audio processing dependencies not available: {e}")
@@ -636,17 +638,9 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
                             except Exception as alt_error:
                                 print(f"[TASK {task_id}] Alternative processor failed: {alt_error}")
                                 
-                                # Approach 3: Try with librosa-based chord detection as fallback
-                                try:
-                                    print(f"[TASK {task_id}] Trying librosa-based chord detection...")
-                                    chords = detect_chords_fallback(audio_file, chord_types)
-                                    if chords and len(chords) > 0:
-                                        print(f"[TASK {task_id}] Librosa fallback succeeded with {len(chords)} chords")
-                                    else:
-                                        raise RuntimeError("Librosa fallback detected no chords")
-                                except Exception as librosa_error:
-                                    print(f"[TASK {task_id}] All approaches failed. Final error: {librosa_error}")
-                                    raise RuntimeError(f"All chord detection methods failed: {chord_error}")
+                                # All madmom approaches failed
+                                print(f"[TASK {task_id}] All madmom approaches failed. Final error: {alt_error}")
+                                raise RuntimeError(f"Madmom chord detection failed: {chord_error}")
                     else:
                         print(f"[TASK {task_id}] Unknown NumPy type mismatch. Trying alternative approach...")
                         raise RuntimeError(f"Chord detection failed: {chord_error}")
