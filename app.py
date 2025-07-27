@@ -1899,9 +1899,18 @@ def index():
 def serve_logo():
     """Serve the logo image"""
     try:
-        return send_file('Logo.png', mimetype='image/png')
+        return send_file('Logo-transparent.png', mimetype='image/png')
     except Exception as e:
-        print(f"Error serving Logo.png: {e}")
+        print(f"Error serving Logo-transparent.png: {e}")
+        return f"Error: {str(e)}", 500
+
+@app.route('/Logo-transparent.png')
+def serve_logo_transparent():
+    """Serve the transparent logo image"""
+    try:
+        return send_file('Logo-transparent.png', mimetype='image/png')
+    except Exception as e:
+        print(f"Error serving Logo-transparent.png: {e}")
         return f"Error: {str(e)}", 500
 
 @app.route('/favicon.ico')
