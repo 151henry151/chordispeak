@@ -309,3 +309,5 @@ uploads/
 - **Processing Pipeline**: Sequential processing with progress tracking
 - **File Management**: Temporary files in task directories
 - **Error Handling**: Comprehensive error reporting and recovery
+
+Last stable commit: https://github.com/151henry151/chordispeak/commit/d6e32fae9cadc996fd9b9e95df5fcb021e977ae6
