@@ -494,15 +494,31 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
             # Initialize with default parameters to avoid type issues
             # Try to use a more basic configuration first
             try:
-                chord_detector = DeepChromaChordRecognitionProcessor()
-                print(f"[TASK {task_id}] Madmom processor initialized successfully")
+                # Check madmom version and apply version-specific fixes
+                madmom_version = madmom.__version__ if hasattr(madmom, '__version__') else 'unknown'
+                print(f"[TASK {task_id}] Madmom version: {madmom_version}")
+                
+                # Try different initialization approaches based on version
+                if madmom_version.startswith('0.16'):
+                    # Version 0.16.x - try with explicit parameters
+                    chord_detector = DeepChromaChordRecognitionProcessor()
+                    print(f"[TASK {task_id}] Madmom processor initialized successfully")
+                else:
+                    # Try with minimal configuration
+                    chord_detector = DeepChromaChordRecognitionProcessor()
+                    print(f"[TASK {task_id}] Madmom processor initialized successfully")
+                    
             except Exception as init_error:
                 print(f"[TASK {task_id}] ERROR initializing DeepChromaChordRecognitionProcessor: {init_error}")
                 # Try alternative initialization
-                from madmom.features.chords import DeepChromaProcessor
-                chroma_processor = DeepChromaProcessor()
-                chord_detector = chroma_processor
-                print(f"[TASK {task_id}] Using alternative madmom processor")
+                try:
+                    from madmom.features.chords import DeepChromaProcessor
+                    chroma_processor = DeepChromaProcessor()
+                    chord_detector = chroma_processor
+                    print(f"[TASK {task_id}] Using alternative madmom processor")
+                except Exception as alt_init_error:
+                    print(f"[TASK {task_id}] Alternative processor also failed: {alt_init_error}")
+                    raise RuntimeError(f"Failed to initialize any madmom processor: {init_error}")
         except Exception as e:
             print(f"[TASK {task_id}] ERROR initializing madmom processor: {e}")
             import traceback
@@ -564,6 +580,12 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
                 try:
                     signal = Signal(audio_file)
                     print(f"[TASK {task_id}] Madmom signal loaded: shape={signal.shape}, dtype={signal.dtype}")
+                    
+                    # Check for string data in signal
+                    if hasattr(signal, 'dtype') and signal.dtype.kind in ['U', 'S']:
+                        print(f"[TASK {task_id}] ERROR: Signal contains string data! dtype={signal.dtype}")
+                        raise RuntimeError("Signal contains string data")
+                    
                     chords = chord_detector(signal)
                 except Exception as signal_error:
                     print(f"[TASK {task_id}] Madmom signal loading failed: {signal_error}")
@@ -585,7 +607,10 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
                         print(f"[TASK {task_id}] ERROR: String data detected in audio processing!")
                         print(f"[TASK {task_id}] This suggests madmom is receiving string data instead of numeric data.")
                         
-                        # Try to reload the audio with explicit dtype and ensure it's numeric
+                        # Try multiple approaches to fix the issue
+                        print(f"[TASK {task_id}] Attempting multiple fixes...")
+                        
+                        # Approach 1: Reload audio with explicit dtype
                         try:
                             y, sr = librosa.load(audio_file, sr=None, mono=True, dtype=np.float32)
                             print(f"[TASK {task_id}] Reloaded audio with float32: shape={y.shape}, dtype={y.dtype}")
@@ -599,8 +624,29 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
                             chords = chord_detector(audio_file)
                             print(f"[TASK {task_id}] Chord detection succeeded after reloading audio")
                         except Exception as retry_error:
-                            print(f"[TASK {task_id}] Retry also failed: {retry_error}")
-                            raise RuntimeError(f"Chord detection failed after retry: {retry_error}")
+                            print(f"[TASK {task_id}] Approach 1 failed: {retry_error}")
+                            
+                            # Approach 2: Try with a different madmom processor
+                            try:
+                                print(f"[TASK {task_id}] Trying alternative madmom processor...")
+                                from madmom.features.chords import DeepChromaProcessor
+                                alt_processor = DeepChromaProcessor()
+                                chords = alt_processor(audio_file)
+                                print(f"[TASK {task_id}] Alternative processor succeeded")
+                            except Exception as alt_error:
+                                print(f"[TASK {task_id}] Alternative processor failed: {alt_error}")
+                                
+                                # Approach 3: Try with librosa-based chord detection as fallback
+                                try:
+                                    print(f"[TASK {task_id}] Trying librosa-based chord detection...")
+                                    chords = detect_chords_fallback(audio_file, chord_types)
+                                    if chords and len(chords) > 0:
+                                        print(f"[TASK {task_id}] Librosa fallback succeeded with {len(chords)} chords")
+                                    else:
+                                        raise RuntimeError("Librosa fallback detected no chords")
+                                except Exception as librosa_error:
+                                    print(f"[TASK {task_id}] All approaches failed. Final error: {librosa_error}")
+                                    raise RuntimeError(f"All chord detection methods failed: {chord_error}")
                     else:
                         print(f"[TASK {task_id}] Unknown NumPy type mismatch. Trying alternative approach...")
                         raise RuntimeError(f"Chord detection failed: {chord_error}")
