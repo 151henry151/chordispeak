@@ -1895,6 +1895,33 @@ def index():
         print(f"Error serving index.html: {e}")
         return f"Error: {str(e)}", 500
 
+@app.route('/Logo.png')
+def serve_logo():
+    """Serve the logo image"""
+    try:
+        return send_file('Logo.png', mimetype='image/png')
+    except Exception as e:
+        print(f"Error serving Logo.png: {e}")
+        return f"Error: {str(e)}", 500
+
+@app.route('/favicon.ico')
+def serve_favicon_ico():
+    """Serve the favicon.ico file"""
+    try:
+        return send_file('favicon.ico', mimetype='image/x-icon')
+    except Exception as e:
+        print(f"Error serving favicon.ico: {e}")
+        return f"Error: {str(e)}", 500
+
+@app.route('/favicon.png')
+def serve_favicon_png():
+    """Serve the favicon.png file"""
+    try:
+        return send_file('favicon.png', mimetype='image/png')
+    except Exception as e:
+        print(f"Error serving favicon.png: {e}")
+        return f"Error: {str(e)}", 500
+
 @app.route('/test')
 def test():
     """Simple test route to verify the app is working"""
