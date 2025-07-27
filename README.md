@@ -4,16 +4,16 @@
 
 ChordiSpeak generates a new vocal track for your song that speaks the chord names in the original singer's voice, perfectly timed to the music.
 
-Note that this app is still in beta-testing and doesn't work fully yet. See or try out what we have so far at https://chordispeak-ao5zbahlha-uk.a.run.app/
-
+**Live Demo**: https://chordispeak.com
 
 ## Features
 - **Vocal/Instrumental Separation**: Uses Demucs AI (htdemucs model) to split uploaded audio into vocals and instrumental
-- **Advanced Chord Detection**: Uses Madmom's deep learning-based chord recognition with high sensitivity for rapid chord changes
+- **Advanced Chord Detection**: Uses Madmom's deep learning-based chord recognition with robust error handling
 - **Voice Cloning**: Uses the full vocal track with Coqui TTS XTTS v2 to synthesize spoken chord names in the original singer's voice
 - **Audio Mixing**: Overlays the synthesized chord vocals onto the instrumental track with precise timing
 - **Real-time Progress Tracking**: Detailed progress updates with demucs percentage tracking
 - **Simple Web Interface**: Upload a file and download the result
+- **Robust Error Handling**: Multiple fallback mechanisms for reliable processing
 
 ## How It Works
 1. **Upload** your audio file (MP3, WAV, FLAC, M4A) via the web interface (max 50MB)
@@ -88,6 +88,8 @@ Chord types are pronounced as: "AY MINOR", "BEE SEVENTH", "SEE MAJOR SEVENTH", e
 - `GET /health` — Health check
 - `GET /docs` — API documentation
 - `POST /cancel/<task_id>` — Cancel running task
+- `GET /logs/<task_id>` — Get detailed processing logs
+- `GET /debug/<task_id>` — Debug task information
 
 ## Project Structure
 ```
@@ -101,20 +103,27 @@ chordispeak/
 ├── start.sh         # Startup script
 ├── knowledge.md     # Technical documentation
 ├── uploads/         # Uploaded and processed files
+├── test_chord_detection.py # Chord detection debugging
 └── README.md        # This file
 ```
 
 ## Recent Improvements (v1.0.0)
 
-### Enhanced Chord Detection
-- **High-sensitivity Madmom configuration**: 44100Hz sample rate, 512 hop size, 50fps frame rate
+### Robust Chord Detection
+- **Madmom-native audio loading**: Uses `madmom.io.audio.load_audio_file()` for better compatibility
 - **Two-step approach**: Chroma feature extraction followed by chord recognition
 - **Conservative filtering**: 0.5 confidence threshold, 0.5s minimum duration, 1.0s between changes
-- **Less aggressive smoothing**: Window size reduced from 3 to 2 for rapid chord detection
-- **Early chord detection**: Fallback mechanism for opening chords
-- **Comprehensive debugging**: Detailed logging of chord detection process
+- **Multiple fallback mechanisms**: 3 different approaches for reliable chord detection
+- **Comprehensive data validation**: Checks for string data, NaN/Inf values, and numeric types
+- **Enhanced error handling**: Detailed logging and graceful degradation
 
-### Better Progress Tracking
+### Web Interface Improvements
+- **Static file serving**: Proper routes for Logo.png, favicon.ico, and favicon.png
+- **Transparent logo**: Optimized 33KB transparent logo for better performance
+- **Updated favicon**: New favicon with proper ICO and PNG formats
+- **Better error reporting**: Specific error messages for each processing step
+
+### Enhanced Progress Tracking
 - **Real-time demucs progress**: Percentage tracking during vocal separation
 - **Detailed step updates**: 8 distinct processing steps with percentages
 - **Chord synthesis progress**: Individual chord synthesis tracking
@@ -148,24 +157,23 @@ python version.py set 1.2.3
 1. **Audio Preparation** (5%): Convert to WAV format
 2. **Vocal Separation** (10-25%): Demucs AI separation with real-time progress
 3. **Voice Sample Extraction** (30%): Extract full vocal track for cloning
-4. **Chord Detection** (40-65%): Madmom deep learning analysis with high sensitivity
+4. **Chord Detection** (40-65%): Madmom deep learning analysis with robust error handling
 5. **TTS Synthesis** (70-85%): Coqui TTS voice cloning per unique chord
 6. **Audio Mixing** (85-100%): Overlay chord vocals onto instrumental
 
 ### Dependencies
 - **Flask**: Web framework with hot-reloading
-- **Madmom**: Advanced chord detection (DeepChromaProcessor + DeepChromaChordRecognitionProcessor)
+- **Madmom**: Advanced chord detection with native audio loading
 - **Demucs**: High-quality vocal separation (htdemucs model)
 - **Coqui TTS**: Voice synthesis with XTTS v2
 - **PyTorch**: Machine learning backend
-- **Librosa**: Audio processing
+- **Librosa**: Audio processing (fallback)
 - **Pydub**: Audio format conversion
 - **Transformers**: 4.49.0 (compatible version)
 
 ## Known Limitations
 - **Processing Time**: TTS synthesis is the slowest step
 - **Memory Usage**: TTS models require significant RAM (8GB+ recommended)
-- **Single Algorithm**: Only Madmom for chord detection (no fallback)
 - **Task Storage**: In-memory only (not persistent across restarts)
 - **Audio Quality**: Depends on Demucs separation quality and vocal clarity
 
