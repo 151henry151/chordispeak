@@ -480,115 +480,102 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
             print(f"[TASK {task_id}] Calling chord_detector with audio_file: {audio_file}")
             chords = chord_detector(audio_file)
             print(f"[TASK {task_id}] Chord detection completed successfully")
-        except Exception as e:
-            print(f"[TASK {task_id}] ERROR during chord detection: {e}")
-            import traceback
-            print(f"[TASK {task_id}] Full traceback: {traceback.format_exc()}")
-            raise RuntimeError(f"Chord detection failed: {e}")
-        
-        # Calculate elapsed time and estimate remaining time
-        elapsed_time = time.time() - start_time
-        estimated_total_time = audio_duration * 0.1  # Rough estimate: 10% of audio duration for processing
-        if elapsed_time < estimated_total_time:
-            progress_ratio = elapsed_time / estimated_total_time
-            estimated_progress = 45 + int(progress_ratio * 5)  # 45-50% range
-            if task_id and task_id in tasks:
-                tasks[task_id]['progress'] = estimated_progress
-                print(f"[TASK {task_id}] Progress: {estimated_progress}% - Chord recognition in progress (estimated)")
-        
-        # Update progress: Raw chord detection complete (50-55%)
-        if task_id and task_id in tasks:
-            tasks[task_id]['step'] = 'Analyzing chord pattern (post-processing)'
-            tasks[task_id]['progress'] = 50
-            print(f"[TASK {task_id}] Progress: 50% - Raw chord detection complete, starting post-processing")
-        
-        # Debug: Print raw madmom output
-        print(f"Raw madmom detected {len(chords)} chord segments:")
-        for i, chord_data in enumerate(chords[:10]):  # Show first 10
-            print(f"  {i}: {chord_data} (length: {len(chord_data)})")
-        
-        # Check the format of the first chord data
-        if len(chords) > 0:
-            print(f"First chord data format: {type(chords[0])}, length: {len(chords[0])}")
-            print(f"First chord data: {chords[0]}")
-        
-        # Convert madmom output to our format
-        chords_with_timing = []
-        
-        # Improved filtering parameters - More sensitive for better detection
-        min_chord_duration = 0.2  # Even more reduced minimum duration to catch very short chord changes
-        min_confidence = 0.2  # Even more reduced confidence threshold to catch more detections
-        min_time_between_chords = 0.3  # Even more reduced minimum time between chord changes
-        
-        # Update progress: Starting chord filtering (55-60%)
-        if task_id and task_id in tasks:
-            tasks[task_id]['step'] = 'Analyzing chord pattern (filtering chords)'
-            tasks[task_id]['progress'] = 55
-            print(f"[TASK {task_id}] Progress: 55% - Starting chord filtering and validation")
-        
-        # First pass: collect all valid chord detections
-        valid_chords = []
-        filtered_out_count = 0
-        for i, chord_data in enumerate(chords):
-            try:
-                # Handle different possible madmom output formats
-                if len(chord_data) >= 4:
-                    # Format: [start_time, end_time, chord_label, confidence]
-                    start_time = float(chord_data[0])
-                    end_time = float(chord_data[1])
-                    chord_label = str(chord_data[2])
-                    confidence = float(chord_data[3])
-                elif len(chord_data) == 3:
-                    # Format: [start_time, end_time, chord_label] (no confidence)
-                    start_time = float(chord_data[0])
-                    end_time = float(chord_data[1])
-                    chord_label = str(chord_data[2])
-                    confidence = 1.0  # Default confidence
-                elif len(chord_data) == 2:
-                    # Format: [time, chord_label]
-                    start_time = float(chord_data[0])
-                    end_time = float(chord_data[0]) + 1.0  # Assume 1 second duration
-                    chord_label = str(chord_data[1])
-                    confidence = 1.0  # Default confidence
-                else:
-                    print(f"Unexpected chord data format: {chord_data}")
-                    continue
+            
+            # Fix data type issues in madmom output
+            if chords is not None and len(chords) > 0:
+                print(f"[TASK {task_id}] Processing {len(chords)} chord segments from madmom")
+                # Convert chords to proper format and handle data type issues
+                processed_chords = []
+                for i, chord_data in enumerate(chords):
+                    try:
+                        # Ensure chord_data is properly formatted
+                        if not isinstance(chord_data, (list, tuple, np.ndarray)):
+                            print(f"Unexpected chord data type: {type(chord_data)}, value: {chord_data}")
+                            filtered_out_count += 1
+                            continue
+                        
+                        # Convert to list if needed
+                        if hasattr(chord_data, 'tolist'):
+                            chord_data = chord_data.tolist()
+                        elif hasattr(chord_data, '__iter__') and not isinstance(chord_data, str):
+                            chord_data = list(chord_data)
+                        
+                        # Handle different possible madmom output formats
+                        if len(chord_data) >= 4:
+                            # Format: [start_time, end_time, chord_label, confidence]
+                            try:
+                                start_time = float(chord_data[0])
+                                end_time = float(chord_data[1])
+                                chord_label = str(chord_data[2])
+                                confidence = float(chord_data[3])
+                            except (ValueError, TypeError) as e:
+                                print(f"Error converting chord data values: {e}, data: {chord_data}")
+                                filtered_out_count += 1
+                                continue
+                        elif len(chord_data) == 3:
+                            # Format: [start_time, end_time, chord_label] (no confidence)
+                            try:
+                                start_time = float(chord_data[0])
+                                end_time = float(chord_data[1])
+                                chord_label = str(chord_data[2])
+                                confidence = 1.0  # Default confidence
+                            except (ValueError, TypeError) as e:
+                                print(f"Error converting chord data values: {e}, data: {chord_data}")
+                                filtered_out_count += 1
+                                continue
+                        elif len(chord_data) == 2:
+                            # Format: [time, chord_label]
+                            try:
+                                start_time = float(chord_data[0])
+                                end_time = float(chord_data[0]) + 1.0  # Assume 1 second duration
+                                chord_label = str(chord_data[1])
+                                confidence = 1.0  # Default confidence
+                            except (ValueError, TypeError) as e:
+                                print(f"Error converting chord data values: {e}, data: {chord_data}")
+                                filtered_out_count += 1
+                                continue
+                        else:
+                            print(f"Unexpected chord data format: {chord_data}")
+                            filtered_out_count += 1
+                            continue
+                        
+                        # Skip 'N' (no chord) detections
+                        if chord_label == 'N':
+                            filtered_out_count += 1
+                            continue
+                        
+                        # Filter by confidence threshold
+                        if confidence < min_confidence:
+                            print(f"Filtered out low confidence chord: {chord_label} at {start_time:.2f}s (confidence: {confidence:.3f} < {min_confidence})")
+                            filtered_out_count += 1
+                            continue
+                        
+                        # Skip very short chord detections
+                        chord_duration = end_time - start_time
+                        if chord_duration < min_chord_duration:
+                            print(f"Filtered out short chord: {chord_label} at {start_time:.2f}s (duration: {chord_duration:.3f}s < {min_chord_duration}s)")
+                            filtered_out_count += 1
+                            continue
+                        
+                        # Convert madmom chord labels to our format
+                        chord_name = convert_madmom_chord(chord_label)
+                        
+                        print(f"Processing chord: {chord_label} -> {chord_name} at {start_time:.2f}-{end_time:.2f}s (confidence: {confidence:.3f})")
+                        
+                        valid_chords.append({
+                            'start_time': start_time,
+                            'end_time': end_time,
+                            'chord': chord_name,
+                            'confidence': confidence,
+                            'duration': chord_duration
+                        })
+                    except Exception as e:
+                        print(f"Error processing chord data {chord_data}: {e}")
+                        filtered_out_count += 1
+                        continue
                 
-                # Skip 'N' (no chord) detections
-                if chord_label == 'N':
-                    filtered_out_count += 1
-                    continue
-                
-                # Filter by confidence threshold
-                if confidence < min_confidence:
-                    print(f"Filtered out low confidence chord: {chord_label} at {start_time:.2f}s (confidence: {confidence:.3f} < {min_confidence})")
-                    filtered_out_count += 1
-                    continue
-                
-                # Skip very short chord detections
-                chord_duration = end_time - start_time
-                if chord_duration < min_chord_duration:
-                    print(f"Filtered out short chord: {chord_label} at {start_time:.2f}s (duration: {chord_duration:.3f}s < {min_chord_duration}s)")
-                    filtered_out_count += 1
-                    continue
-                
-                # Convert madmom chord labels to our format
-                chord_name = convert_madmom_chord(chord_label)
-                
-                print(f"Processing chord: {chord_label} -> {chord_name} at {start_time:.2f}-{end_time:.2f}s (confidence: {confidence:.3f})")
-                
-                valid_chords.append({
-                    'start_time': start_time,
-                    'end_time': end_time,
-                    'chord': chord_name,
-                    'confidence': confidence,
-                    'duration': chord_duration
-                })
-            except Exception as e:
-                print(f"Error processing chord data {chord_data}: {e}")
-                filtered_out_count += 1
-                continue
-        
+                chords = processed_chords
+                print(f"[TASK {task_id}] Successfully processed {len(chords)} chord segments")
         print(f"After filtering: {len(valid_chords)} valid chord segments (filtered out {filtered_out_count})")
         
         # Update progress: Starting chord smoothing (60-65%)
