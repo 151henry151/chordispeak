@@ -108,7 +108,8 @@ chordispeak/
 
 ### Enhanced Chord Detection
 - **High-sensitivity Madmom configuration**: 44100Hz sample rate, 512 hop size, 50fps frame rate
-- **Reduced filtering thresholds**: 0.2s minimum duration, 0.2 confidence, 0.3s between changes
+- **Two-step approach**: Chroma feature extraction followed by chord recognition
+- **Conservative filtering**: 0.5 confidence threshold, 0.5s minimum duration, 1.0s between changes
 - **Less aggressive smoothing**: Window size reduced from 3 to 2 for rapid chord detection
 - **Early chord detection**: Fallback mechanism for opening chords
 - **Comprehensive debugging**: Detailed logging of chord detection process

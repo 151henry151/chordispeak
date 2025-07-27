@@ -44,15 +44,19 @@ ChordiSpeak is an AI-powered web application that generates spoken chord names o
 - **Output**: `voice_sample.wav` for TTS voice cloning
 - **Processing**: Direct librosa load of full vocal track
 
-### 4. Chord Detection
+## Chord Detection
+
+### Implementation Details
 - **Tool**: Madmom (DeepChromaProcessor + DeepChromaChordRecognitionProcessor)
 - **Method**: 
-  - Chroma feature extraction with high resolution
+  - Two-step approach: Chroma feature extraction followed by chord recognition
+  - High-resolution chroma features (44100Hz, 512 hop size, 50fps)
   - Deep learning-based chord recognition
   - Progress tracking with detailed step updates
-  - Minimum 1.0 seconds between chord changes
-  - Confidence threshold: 0.6
-  - Minimum chord duration: 1.0 seconds
+  - Conservative filtering for speech synthesis
+  - Confidence threshold: 0.5 (more conservative)
+  - Minimum chord duration: 0.5 seconds
+  - Minimum time between chords: 1.0 seconds (realistic for speech)
 - **Chord Types Supported** (via madmom):
   - Major chords (maj)
   - Minor chords (min)

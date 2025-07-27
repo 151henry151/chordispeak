@@ -437,7 +437,7 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
     try:
         import time
         print(f"[TASK {task_id}] Importing madmom modules...")
-        from madmom.features.chords import DeepChromaChordRecognitionProcessor
+        from madmom.features.chords import DeepChromaProcessor, DeepChromaChordRecognitionProcessor
         print(f"[TASK {task_id}] Madmom modules imported successfully")
         
         # Debug: Print audio file info
@@ -476,8 +476,8 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
         # Ensure audio is contiguous in memory
         y = np.ascontiguousarray(y, dtype=np.float32)
         
-        # Initialize madmom chord detection using the correct approach
-        print(f"[TASK {task_id}] Initializing madmom processor...")
+        # Initialize madmom chord detection using the recommended two-step approach
+        print(f"[TASK {task_id}] Initializing madmom processors...")
         try:
             # Add debug info about madmom version and dependencies
             import madmom
@@ -493,14 +493,28 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
             else:
                 print(f"[TASK {task_id}] Warning: Could not determine madmom version")
             
-            # Initialize madmom chord detection processor
-            # According to documentation, use the standard processor
+            # Initialize madmom processors with recommended parameters
+            # Step 1: Chroma feature extraction
             try:
-                chord_detector = DeepChromaChordRecognitionProcessor()
-                print(f"[TASK {task_id}] Madmom processor initialized successfully")
+                chroma_processor = DeepChromaProcessor(
+                    sample_rate=44100,  # Standard sample rate
+                    hop_size=512,       # Frame hop size for good temporal resolution
+                    fps=50,            # 50 frames per second for smooth detection
+                    num_classes=25      # Standard number of chord classes
+                )
+                print(f"[TASK {task_id}] Chroma processor initialized successfully")
+                
+                # Step 2: Chord recognition from chroma features
+                chord_processor = DeepChromaChordRecognitionProcessor()
+                print(f"[TASK {task_id}] Chord processor initialized successfully")
+                
             except Exception as init_error:
-                print(f"[TASK {task_id}] ERROR initializing DeepChromaChordRecognitionProcessor: {init_error}")
-                raise RuntimeError(f"Failed to initialize madmom processor: {init_error}")
+                print(f"[TASK {task_id}] ERROR initializing madmom processors: {init_error}")
+                # Fallback to single-step approach
+                print(f"[TASK {task_id}] Falling back to single-step approach...")
+                chord_detector = DeepChromaChordRecognitionProcessor()
+                print(f"[TASK {task_id}] Fallback processor initialized successfully")
+                
         except Exception as e:
             print(f"[TASK {task_id}] ERROR initializing madmom processor: {e}")
             import traceback
@@ -510,11 +524,11 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
         # Start timing for progress estimation
         start_time = time.time()
         
-        # Initialize variables for chord processing
+        # Initialize variables for chord processing with more conservative thresholds
         filtered_out_count = 0
-        min_confidence = 0.2  # Minimum confidence threshold
-        min_chord_duration = 0.2  # Minimum chord duration in seconds
-        min_time_between_chords = 0.3  # Minimum time between chord changes
+        min_confidence = 0.5  # More conservative confidence threshold
+        min_chord_duration = 0.5  # Longer minimum chord duration
+        min_time_between_chords = 1.0  # More realistic for speech synthesis
         valid_chords = []
         
         # Update progress: Starting chord detection (40-50%)
@@ -526,7 +540,7 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
         # Process the audio file with the chord detector
         print(f"[TASK {task_id}] Starting chord detection...")
         try:
-            print(f"[TASK {task_id}] Calling chord_detector with audio_file: {audio_file}")
+            print(f"[TASK {task_id}] Calling chord detection with audio_file: {audio_file}")
             # Add debug info about the audio file
             import os
             if os.path.exists(audio_file):
@@ -557,10 +571,24 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
                 print(f"[TASK {task_id}] Audio file path: {audio_file}")
                 print(f"[TASK {task_id}] Audio file type: {type(audio_file)}")
                 
-                # According to madmom documentation, pass the file path directly
-                # The processor handles audio loading internally
-                print(f"[TASK {task_id}] Calling chord_detector with file path...")
-                chords = chord_detector(audio_file)
+                # Try the recommended two-step approach first
+                try:
+                    print(f"[TASK {task_id}] Using two-step madmom approach...")
+                    # Step 1: Extract chroma features
+                    chroma = chroma_processor(audio_file)
+                    print(f"[TASK {task_id}] Chroma features extracted: shape={chroma.shape}")
+                    
+                    # Step 2: Recognize chords from chroma features
+                    chords = chord_processor(chroma)
+                    print(f"[TASK {task_id}] Two-step chord detection completed successfully")
+                    
+                except Exception as two_step_error:
+                    print(f"[TASK {task_id}] Two-step approach failed: {two_step_error}")
+                    print(f"[TASK {task_id}] Falling back to single-step approach...")
+                    
+                    # Fallback to single-step approach
+                    chords = chord_detector(audio_file)
+                    print(f"[TASK {task_id}] Single-step chord detection completed successfully")
                 
                 print(f"[TASK {task_id}] Chord detection completed successfully")
             except Exception as chord_error:
@@ -680,13 +708,13 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
                             filtered_out_count += 1
                             continue
                         
-                        # Filter by confidence threshold
+                        # Filter by confidence threshold (more conservative)
                         if confidence < min_confidence:
                             print(f"Filtered out low confidence chord: {chord_label} at {start_time:.2f}s (confidence: {confidence:.3f} < {min_confidence})")
                             filtered_out_count += 1
                             continue
                         
-                        # Skip very short chord detections
+                        # Skip very short chord detections (longer minimum duration)
                         chord_duration = end_time - start_time
                         if chord_duration < min_chord_duration:
                             print(f"Filtered out short chord: {chord_label} at {start_time:.2f}s (duration: {chord_duration:.3f}s < {min_chord_duration}s)")
@@ -762,7 +790,7 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
                         'duration': valid_chords[i]['duration']
                     })
             
-            # Final pass: ensure minimum time between chord changes
+            # Final pass: ensure minimum time between chord changes (more realistic for speech)
             final_chords = []
             for chord_info in smoothed_chords:
                 if not final_chords or (chord_info['time'] - final_chords[-1]['time']) >= min_time_between_chords:
