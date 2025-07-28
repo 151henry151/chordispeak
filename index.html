@@ -236,16 +236,16 @@
             margin: 0;
             word-wrap: break-word;
             display: inline-block;
-            animation: tickerScroll 3s linear;
-            transform: translateX(100%);
+            animation: tickerScrollLeft 3s linear;
+            transform: translateX(0);
         }
 
-        @keyframes tickerScroll {
+        @keyframes tickerScrollLeft {
             0% {
-                transform: translateX(100%);
+                transform: translateX(0);
             }
             100% {
-                transform: translateX(-100%);
+                transform: translateX(calc(-100% + 100px));
             }
         }
 
@@ -1409,7 +1409,9 @@
         function truncateTaskId(taskId) {
             if (!taskId) return '';
             // Extract the first 5 characters and add ellipsis
-            return taskId.substring(0, 5) + '...';
+            const truncated = taskId.substring(0, 5) + '...';
+            console.log(`Truncating task ID: "${taskId}" -> "${truncated}"`);
+            return truncated;
         }
 
         function addTaskLog(message) {
@@ -1418,14 +1420,25 @@
             const logLine = document.createElement('div');
             logLine.className = 'task-log-line';
             
+            console.log('Original message:', message);
+            
             // Truncate task IDs in the message
             let processedMessage = message;
-            if (message.includes('[TASK ')) {
-                // Find and replace task IDs with truncated versions
-                processedMessage = message.replace(/\[TASK ([a-f0-9-]+)\]/g, (match, taskId) => {
-                    return `[TASK ${truncateTaskId(taskId)}]`;
-                });
-            }
+            
+            // Look for task IDs in the message content (not just [TASK xxx] format)
+            // The backend format is: "[timestamp] Task {task_id} started. File: {file_path}"
+            processedMessage = message.replace(/(Task )([a-f0-9-]+)( started\. File:)/g, (match, prefix, taskId, suffix) => {
+                console.log('Found task ID in message:', taskId);
+                return `${prefix}${truncateTaskId(taskId)}${suffix}`;
+            });
+            
+            // Also handle other patterns where task ID might appear
+            processedMessage = processedMessage.replace(/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/g, (match, taskId) => {
+                console.log('Found full task ID in message:', taskId);
+                return truncateTaskId(taskId);
+            });
+            
+            console.log('Processed message:', processedMessage);
             
             // Don't add another [TASK] prefix since the message already has it
             logLine.textContent = processedMessage;
