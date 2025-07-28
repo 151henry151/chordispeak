@@ -199,14 +199,74 @@
             padding: 2.5rem;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
             text-align: center;
-            max-width: 500px;
+            max-width: 600px;
             width: 90%;
             transform: scale(0.9);
             transition: transform 0.3s ease;
+            position: relative;
+            overflow: hidden;
         }
 
         .modal-overlay.show .modal-content {
             transform: scale(1);
+        }
+
+        /* Task logs window effect */
+        .task-logs-window {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+            padding: 20px;
+            overflow-y: auto;
+            text-align: left;
+            z-index: 1;
+            opacity: 0.8;
+        }
+
+        .task-logs-window::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .task-logs-window::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .task-logs-window::-webkit-scrollbar-thumb {
+            background: rgba(0, 255, 0, 0.5);
+            border-radius: 4px;
+        }
+
+        .task-log-line {
+            margin: 2px 0;
+            word-wrap: break-word;
+        }
+
+        .task-log-line.new {
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Progress overlay */
+        .progress-overlay {
+            position: relative;
+            z-index: 2;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 2rem;
+            margin: 1rem;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
 
         .progress-bar {
@@ -215,6 +275,8 @@
             height: 20px;
             overflow: hidden;
             margin: 1rem 0;
+            position: relative;
+            z-index: 3;
         }
 
         .progress-fill {
@@ -227,6 +289,8 @@
 
         .progress-details {
             margin: 1rem 0;
+            position: relative;
+            z-index: 3;
         }
 
         .progress-text {
@@ -256,6 +320,8 @@
             font-weight: 600;
             text-transform: uppercase;
             margin: 0.5rem;
+            position: relative;
+            z-index: 3;
         }
 
         .status-starting { background: #000000; color: #ffffff; }
@@ -1057,21 +1123,30 @@
             <!-- Progress Modal -->
             <div class="modal-overlay" id="progressModal">
                 <div class="modal-content">
-                    <h2>Processing</h2>
-                    <p class="patience-note">⏱️ This may take a few minutes, please be patient</p>
-                    <div class="progress-details">
-                        <div class="progress-text" id="progressText">Initializing...</div>
-                        <div class="progress-percentage" id="progressPercentage">0%</div>
-                        <div class="progress-status" id="progressStatus">Starting...</div>
+                    <!-- Task logs window (background) -->
+                    <div class="task-logs-window" id="taskLogsWindow">
+                        <div class="task-log-line">[TASK] Initializing ChordiSpeak...</div>
+                        <div class="task-log-line">[TASK] Ready to process audio file...</div>
                     </div>
-                    <div class="progress-bar">
-                        <div class="progress-fill" id="progressFill"></div>
-                    </div>
-                    <div class="status-badge" id="statusBadge">Starting</div>
                     
-                    <div class="modal-actions">
-                        <button class="cancel-button" id="cancelBtn">❌ Cancel</button>
-                        <button class="close-modal-button" id="closeModalBtn" style="display: none;">🔒 Close Modal</button>
+                    <!-- Progress overlay (foreground) -->
+                    <div class="progress-overlay">
+                        <h2>Processing</h2>
+                        <p class="patience-note">⏱️ This may take a few minutes, please be patient</p>
+                        <div class="progress-details">
+                            <div class="progress-text" id="progressText">Initializing...</div>
+                            <div class="progress-percentage" id="progressPercentage">0%</div>
+                            <div class="progress-status" id="progressStatus">Starting...</div>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                        <div class="status-badge" id="statusBadge">Starting</div>
+                        
+                        <div class="modal-actions">
+                            <button class="cancel-button" id="cancelBtn">❌ Cancel</button>
+                            <button class="close-modal-button" id="closeModalBtn" style="display: none;">🔒 Close Modal</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1172,6 +1247,7 @@
         const mainDebugSection = document.getElementById('mainDebugSection');
         const mainDebugLogs = document.getElementById('mainDebugLogs');
         const debugToggleMain = document.getElementById('debugToggleMain');
+        const taskLogsWindow = document.getElementById('taskLogsWindow');
 
         // File upload handling
         fileInput.addEventListener('change', handleFileUpload);
@@ -1331,10 +1407,64 @@
             mainDebugLogs.innerHTML = '<p>Debug logs will appear here during processing...</p>';
             // Show main debug section immediately
             mainDebugSection.style.display = 'block';
+            // Initialize task logs window
+            taskLogsWindow.innerHTML = `
+                <div class="task-log-line">[TASK] Initializing ChordiSpeak...</div>
+                <div class="task-log-line">[TASK] Ready to process audio file...</div>
+            `;
             // Start debug polling after a few seconds
             setTimeout(() => {
                 startDebugPolling();
             }, 3000);
+        }
+
+        // Task log functionality
+        function addTaskLog(message) {
+            const logLine = document.createElement('div');
+            logLine.className = 'task-log-line new';
+            logLine.textContent = `[TASK] ${message}`;
+            taskLogsWindow.appendChild(logLine);
+            
+            // Auto-scroll to bottom
+            taskLogsWindow.scrollTop = taskLogsWindow.scrollHeight;
+            
+            // Remove animation class after animation completes
+            setTimeout(() => {
+                logLine.classList.remove('new');
+            }, 300);
+        }
+
+        async function fetchTaskLogs(taskId) {
+            try {
+                const response = await fetch(`/logs/${taskId}`);
+                if (response.ok) {
+                    const logs = await response.text();
+                    return logs;
+                }
+            } catch (error) {
+                console.error('Error fetching task logs:', error);
+            }
+            return null;
+        }
+
+        function updateTaskLogsDisplay(logsText) {
+            if (!logsText) return;
+            
+            // Split logs into lines and filter out empty lines
+            const lines = logsText.split('\n').filter(line => line.trim());
+            
+            // Get current logs in the window
+            const currentLogs = Array.from(taskLogsWindow.children).map(child => child.textContent);
+            
+            // Find new lines that aren't already displayed
+            const newLines = lines.filter(line => !currentLogs.includes(line));
+            
+            // Add new lines to the display
+            newLines.forEach(line => {
+                if (line.trim()) {
+                    addTaskLog(line.replace(/^\[TASK [^\]]+\] /, '')); // Remove the [TASK xxx] prefix
+                }
+            });
         }
 
         function updateProgress(percentage, text, status) {
@@ -1361,6 +1491,12 @@
                     
                     // Debug: log the status data
                     console.log('Status update:', status);
+                    
+                    // Fetch and update task logs
+                    const taskLogs = await fetchTaskLogs(currentTaskId);
+                    if (taskLogs) {
+                        updateTaskLogsDisplay(taskLogs);
+                    }
                     
                     let progress = 0;
                     let text = 'Processing...';
