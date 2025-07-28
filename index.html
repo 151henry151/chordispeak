@@ -1504,48 +1504,60 @@
 
                     switch (status.status) {
                         case 'processing':
-                            // Map backend step names to user-friendly messages
-                            const stepMessages = {
-                                'Preparing audio file': 'Preparing audio file...',
-                                'Splitting vocal & instrumental': 'Separating instrumental and vocal tracks...',
-                                'Running Demucs vocal separation...': 'Separating instrumental and vocal tracks...',
-                                'Extracting voice sample': 'Extracting voice sample...',
-                                'Analyzing chord pattern': 'Analyzing chord pattern...',
-                                'Synthesizing spoken chord overlay': 'Synthesizing spoken chord overlay...',
-                                'Overlaying spoken chords onto instrumental track': 'Overlaying spoken chords onto instrumental track...',
-                                'Complete': 'Processing complete!'
-                            };
-                            
-                            // Check if this is a demucs progress message
-                            if (status.step && status.step.startsWith('Demucs:')) {
-                                text = 'Separating instrumental and vocal tracks...';
-                                // Map demucs percentage (0-100) to overall progress (10-25)
-                                if (status.demucs_percentage !== undefined) {
-                                    progress = Math.round(10 + (status.demucs_percentage * 0.15)); // 10% to 25%
-                                } else {
-                                    progress = 25; // Demucs step
-                                }
-                            } else if (status.step === 'Splitting vocal & instrumental') {
-                                text = 'Separating instrumental and vocal tracks...';
-                                // If we have demucs percentage, use it; otherwise use default progress
-                                if (status.demucs_percentage !== undefined) {
-                                    progress = Math.round(10 + (status.demucs_percentage * 0.15)); // 10% to 25%
-                                    console.log(`Demucs progress: ${status.demucs_percentage}% -> ${progress}%`);
-                                } else {
-                                    progress = 25; // Default demucs step progress
-                                }
-                            } else if (status.step === 'Running Demucs vocal separation...') {
-                                text = 'Separating instrumental and vocal tracks...';
-                                // If we have demucs percentage, use it; otherwise use default progress
-                                if (status.demucs_percentage !== undefined) {
-                                    progress = Math.round(10 + (status.demucs_percentage * 0.15)); // 10% to 25%
-                                } else {
-                                    progress = 25; // Default demucs step progress
-                                }
+                            // Use the actual progress from the backend if available
+                            if (status.progress !== undefined) {
+                                progress = status.progress;
+                                console.log(`Using backend progress: ${progress}%`);
                             } else {
-                                text = stepMessages[status.step] || 'Processing...';
-                                progress = getProgressForStep(status.step);
+                                // Fallback to step-based progress calculation
+                                const stepMessages = {
+                                    'Preparing audio file': 'Preparing audio file...',
+                                    'Splitting vocal & instrumental': 'Separating instrumental and vocal tracks...',
+                                    'Running Demucs vocal separation...': 'Separating instrumental and vocal tracks...',
+                                    'Extracting voice sample': 'Extracting voice sample...',
+                                    'Analyzing chord pattern': 'Analyzing chord pattern...',
+                                    'Synthesizing spoken chord overlay': 'Synthesizing spoken chord overlay...',
+                                    'Overlaying spoken chords onto instrumental track': 'Overlaying spoken chords onto instrumental track...',
+                                    'Complete': 'Processing complete!'
+                                };
+                                
+                                // Check if this is a demucs progress message
+                                if (status.step && status.step.startsWith('Demucs:')) {
+                                    text = 'Separating instrumental and vocal tracks...';
+                                    // Map demucs percentage (0-100) to overall progress (10-25)
+                                    if (status.demucs_percentage !== undefined) {
+                                        progress = Math.round(10 + (status.demucs_percentage * 0.15)); // 10% to 25%
+                                    } else {
+                                        progress = 25; // Demucs step
+                                    }
+                                } else if (status.step === 'Splitting vocal & instrumental') {
+                                    text = 'Separating instrumental and vocal tracks...';
+                                    // If we have demucs percentage, use it; otherwise use default progress
+                                    if (status.demucs_percentage !== undefined) {
+                                        progress = Math.round(10 + (status.demucs_percentage * 0.15)); // 10% to 25%
+                                        console.log(`Demucs progress: ${status.demucs_percentage}% -> ${progress}%`);
+                                    } else {
+                                        progress = 25; // Default demucs step progress
+                                    }
+                                } else if (status.step === 'Running Demucs vocal separation...') {
+                                    text = 'Separating instrumental and vocal tracks...';
+                                    // If we have demucs percentage, use it; otherwise use default progress
+                                    if (status.demucs_percentage !== undefined) {
+                                        progress = Math.round(10 + (status.demucs_percentage * 0.15)); // 10% to 25%
+                                    } else {
+                                        progress = 25; // Default demucs step progress
+                                    }
+                                } else {
+                                    text = stepMessages[status.step] || 'Processing...';
+                                    progress = getProgressForStep(status.step);
+                                }
                             }
+                            
+                            // Use the step text from backend if available
+                            if (status.step) {
+                                text = status.step;
+                            }
+                            
                             statusText = 'Processing';
                             break;
                         case 'completed':
