@@ -1516,18 +1516,8 @@
                 if (response.ok) {
                     const status = await response.json();
                     
-                    // Debug: log the status data
-                    console.log('Status update:', status);
-                    console.log('Backend progress:', status.progress);
-                    console.log('Backend step:', status.step);
-                    console.log('Status type:', typeof status.progress);
-                    console.log('Progress is null?', status.progress === null);
-                    console.log('Progress is undefined?', status.progress === undefined);
-                    console.log('Full status object:', JSON.stringify(status, null, 2));
-                    
                     // Fetch and update task logs
                     const taskLogs = await fetchTaskLogs(currentTaskId);
-                    console.log('Fetched task logs:', taskLogs);
                     if (taskLogs) {
                         updateTaskLogsDisplay(taskLogs);
                     }
