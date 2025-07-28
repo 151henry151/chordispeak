@@ -1093,7 +1093,7 @@ def detect_beats(audio_file, task_id=None):
 
 def align_chords_to_beats(chords, beats, task_id=None):
     """Align chord announcements to the nearest downbeat"""
-    if not beats or len(beats) == 0:
+    if beats is None or len(beats) == 0:
         print(f"[TASK {task_id}] No beats detected, using original chord timing")
         return chords
     
