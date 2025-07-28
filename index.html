@@ -224,7 +224,6 @@
             line-height: 1.2;
             white-space: nowrap;
             overflow: hidden;
-            text-overflow: ellipsis;
             z-index: 4;
             text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
             background: rgba(0, 0, 0, 0.7);
@@ -236,15 +235,18 @@
         .task-log-line {
             margin: 0;
             word-wrap: break-word;
+            display: inline-block;
+            animation: tickerScroll 8s linear;
+            transform: translateX(100%);
         }
 
-        .task-log-line.new {
-            animation: slideIn 0.5s ease-in;
-        }
-
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateX(-20px); }
-            to { opacity: 1; transform: translateX(0); }
+        @keyframes tickerScroll {
+            0% {
+                transform: translateX(100%);
+            }
+            100% {
+                transform: translateX(-100%);
+            }
         }
 
         /* Progress overlay */
@@ -1411,10 +1413,9 @@
         }
 
         function addTaskLog(message) {
-            // Clear previous log and show new one
-            taskLogDisplay.innerHTML = '';
+            // Don't clear previous logs - let them scroll out naturally
             const logLine = document.createElement('div');
-            logLine.className = 'task-log-line new';
+            logLine.className = 'task-log-line';
             
             // Truncate task IDs in the message
             let processedMessage = message;
@@ -1425,13 +1426,16 @@
                 });
             }
             
-            logLine.textContent = `[TASK] ${processedMessage}`;
+            // Don't add another [TASK] prefix since the message already has it
+            logLine.textContent = processedMessage;
             taskLogDisplay.appendChild(logLine);
             
-            // Remove animation class after animation completes
+            // Remove the element after animation completes
             setTimeout(() => {
-                logLine.classList.remove('new');
-            }, 500);
+                if (logLine.parentNode) {
+                    logLine.parentNode.removeChild(logLine);
+                }
+            }, 8000); // Match the animation duration
         }
 
         async function fetchTaskLogs(taskId) {
@@ -1453,11 +1457,14 @@
             // Split logs into lines and filter out empty lines
             const lines = logsText.split('\n').filter(line => line.trim());
             
-            // Show only the most recent line
+            // Show only the most recent line with ticker effect
             if (lines.length > 0) {
                 const latestLine = lines[lines.length - 1];
                 if (latestLine.trim()) {
-                    addTaskLog(latestLine.replace(/^\[TASK [^\]]+\] /, '')); // Remove the [TASK xxx] prefix
+                    // Don't clear previous logs immediately - let them scroll out
+                    setTimeout(() => {
+                        addTaskLog(latestLine); // Pass the full message to let addTaskLog handle truncation
+                    }, 100); // Small delay to ensure smooth ticker effect
                 }
             }
         }
