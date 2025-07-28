@@ -236,7 +236,7 @@
             margin: 0;
             word-wrap: break-word;
             display: inline-block;
-            animation: tickerScroll 8s linear;
+            animation: tickerScroll 3s linear;
             transform: translateX(100%);
         }
 
@@ -1413,7 +1413,8 @@
         }
 
         function addTaskLog(message) {
-            // Don't clear previous logs - let them scroll out naturally
+            // Clear previous logs to show only one message at a time
+            taskLogDisplay.innerHTML = '';
             const logLine = document.createElement('div');
             logLine.className = 'task-log-line';
             
@@ -1435,7 +1436,7 @@
                 if (logLine.parentNode) {
                     logLine.parentNode.removeChild(logLine);
                 }
-            }, 8000); // Match the animation duration
+            }, 3000); // Match the animation duration
         }
 
         async function fetchTaskLogs(taskId) {
@@ -1461,10 +1462,7 @@
             if (lines.length > 0) {
                 const latestLine = lines[lines.length - 1];
                 if (latestLine.trim()) {
-                    // Don't clear previous logs immediately - let them scroll out
-                    setTimeout(() => {
-                        addTaskLog(latestLine); // Pass the full message to let addTaskLog handle truncation
-                    }, 100); // Small delay to ensure smooth ticker effect
+                    addTaskLog(latestLine); // Pass the full message to let addTaskLog handle truncation
                 }
             }
         }
