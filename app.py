@@ -624,386 +624,75 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
             print(f"[TASK {task_id}]   {chord_info['chord']} at {chord_info['time']:.2f}s")
         
         # Update progress: Chord detection complete (65%)
-        if task_id and task_id in tasks:
-            tasks[task_id]['step'] = 'Analyzing chord pattern (complete)'
-            tasks[task_id]['progress'] = 65
-            print(f"[TASK {task_id}] Progress: 65% - Chord detection and processing complete")
-        
-        return final_chords
-        
-    except Exception as e:
-        print(f"[TASK {task_id}] ERROR in chord detection: {e}")
-        import traceback
-        traceback.print_exc()
-        raise RuntimeError(f"Chord detection failed: {e}")
-
-def convert_madmom_chord(madmom_label):
-    """Convert madmom chord labels to our chord format"""
-    # madmom uses labels like 'C:maj', 'C:min', 'C:7', etc.
-    if ':' not in madmom_label:
-        return madmom_label
-    
-    root, quality = madmom_label.split(':')
-    
-    # Convert quality to our format
-    if quality == 'maj':
-        return root
-    elif quality == 'min':
-        return root + 'm'
-    elif quality == '7':
-        return root + '7'
-    elif quality == 'maj7':
-        return root + 'maj7'
-    elif quality == 'min7':
-        return root + 'm7'
-    elif quality == 'dim':
-        return root + 'dim'
-    elif quality == 'aug':
-        return root + 'aug'
-    elif quality == 'sus2':
-        return root + 'sus2'
-    elif quality == 'sus4':
-        return root + 'sus4'
-    else:
-        return madmom_label  # Return as-is for unknown qualities
-
-def synthesize_chord_speech(text, voice_sample_path, output_path):
-    """Generate speech using only Coqui XTTS v2 voice cloning"""
-    if not lazy_import_tts():
-        raise RuntimeError("Coqui TTS not available. Please install Coqui TTS (XTTS v2).")
-    if not voice_sample_path or not os.path.exists(voice_sample_path):
-        raise RuntimeError("Voice sample for cloning not found. Cannot synthesize without a reference voice.")
-    return synthesize_chord_speech_coqui(text, voice_sample_path, output_path)
-
-def detect_chords(audio_file, chord_types=None, task_id=None):
-    """Detect chords from audio file using madmom for accurate chord recognition with progress tracking"""
-    print(f"[TASK {task_id}] Starting detect_chords function")
-    
-    if not lazy_import_audio_deps():
-        raise RuntimeError("Audio processing dependencies not available. Cannot perform chord detection.")
-    
-    # Comprehensive audio file validation
-    print(f"[TASK {task_id}] Validating audio file: {audio_file}")
-    try:
-        import os
-        if not os.path.exists(audio_file):
-            raise RuntimeError(f"Audio file does not exist: {audio_file}")
-        
-        file_size = os.path.getsize(audio_file)
-        if file_size == 0:
-            raise RuntimeError(f"Audio file is empty: {audio_file}")
-        
-        print(f"[TASK {task_id}] Audio file validation passed: size={file_size} bytes")
-        
-        # Try to validate with soundfile first
-        import soundfile as sf
-        try:
-            info = sf.info(audio_file)
-            print(f"[TASK {task_id}] Soundfile validation: samplerate={info.samplerate}, channels={info.channels}, duration={info.duration:.2f}s")
-            if info.duration <= 0:
-                raise RuntimeError(f"Audio file has zero duration: {audio_file}")
-        except Exception as sf_error:
-            print(f"[TASK {task_id}] Warning: Soundfile validation failed: {sf_error}")
-            # Continue with librosa validation
-        
-    except Exception as validation_error:
-        print(f"[TASK {task_id}] Audio file validation failed: {validation_error}")
-        raise RuntimeError(f"Audio file validation failed: {validation_error}")
-        
-    try:
-        import time
-        print(f"[TASK {task_id}] Importing madmom modules...")
-        from madmom.features.chords import DeepChromaChordRecognitionProcessor
-        print(f"[TASK {task_id}] Madmom modules imported successfully")
-        
-        # Initialize madmom chord detector
-        print(f"[TASK {task_id}] Initializing madmom chord detector...")
-        
-        # Debug: Print audio file info
-        import soundfile as sf
-        try:
-            info = sf.info(audio_file)
-            print(f"[TASK {task_id}] Audio file info: samplerate={info.samplerate}, channels={info.channels}, duration={info.duration:.2f}s, format={info.format}, subtype={info.subtype}")
-        except Exception as e:
-            print(f"[TASK {task_id}] Could not get audio file info with soundfile: {e}")
-        
-        # Get audio duration for progress estimation
-        # Use madmom's own audio loading for better compatibility
-        print(f"[TASK {task_id}] Loading audio with madmom's audio loader...")
-        try:
-            from madmom.io.audio import load_audio_file
-            y, sr = load_audio_file(audio_file, sample_rate=44100, num_channels=1, dtype=np.float32)
-            audio_duration = len(y) / sr
-            print(f"[TASK {task_id}] Madmom audio loader: duration={audio_duration:.2f}s, sr={sr}, shape={y.shape}, dtype={y.dtype}")
-        except Exception as madmom_load_error:
-            print(f"[TASK {task_id}] Madmom audio loading failed: {madmom_load_error}")
-            print(f"[TASK {task_id}] Falling back to librosa...")
-            # Fallback to librosa
-            y, sr = librosa.load(audio_file, sr=None, mono=True, dtype=np.float32)
-            audio_duration = len(y) / sr
-            print(f"[TASK {task_id}] Librosa fallback: duration={audio_duration:.2f}s, sr={sr}, shape={y.shape}, dtype={y.dtype}")
-        
-        # CRITICAL: Check for string data in audio (this causes the NumPy error)
-        if y.dtype.kind in ['U', 'S']:
-            print(f"[TASK {task_id}] ERROR: Audio data contains strings! dtype={y.dtype}")
-            print(f"[TASK {task_id}] This will cause the NumPy multiply error. Attempting to fix...")
-            
-            # Try to reload with different parameters
-            try:
-                print(f"[TASK {task_id}] Attempting to reload audio with explicit numeric conversion...")
-                y, sr = librosa.load(audio_file, sr=44100, mono=True, dtype=np.float32)
-                
-                # Check again
-                if y.dtype.kind in ['U', 'S']:
-                    print(f"[TASK {task_id}] ERROR: Still getting string data after reload!")
-                    raise RuntimeError("Audio file contains string data instead of numeric data")
-                else:
-                    print(f"[TASK {task_id}] Successfully reloaded audio with numeric data: dtype={y.dtype}")
-            except Exception as reload_error:
-                print(f"[TASK {task_id}] Failed to reload audio: {reload_error}")
-                raise RuntimeError(f"Audio file appears to be corrupted or contains invalid data: {reload_error}")
-        
-        # Additional validation: Check for NaN or Inf values
-        if np.any(np.isnan(y)) or np.any(np.isinf(y)):
-            print(f"[TASK {task_id}] WARNING: Audio contains NaN or Inf values, cleaning...")
-            y = np.nan_to_num(y, nan=0.0, posinf=1.0, neginf=-1.0)
-        
-        # Ensure audio data is float32 for madmom compatibility
-        if y.dtype != np.float32:
-            print(f"[TASK {task_id}] Converting audio dtype from {y.dtype} to float32")
-            y = y.astype(np.float32)
-        
-        # Additional NumPy compatibility fixes for madmom
-        print(f"[TASK {task_id}] Applying NumPy compatibility fixes...")
-        if not hasattr(np, 'float'):
-            np.float = float
-        if not hasattr(np, 'int'):
-            np.int = int
-        if not hasattr(np, 'complex'):
-            np.complex = complex
-        
-        # Ensure audio is properly formatted for madmom
-        print(f"[TASK {task_id}] Preparing audio for madmom processing...")
-        # Normalize audio to prevent overflow issues
-        if np.max(np.abs(y)) > 1.0:
-            y = y / np.max(np.abs(y))
-        
-        # Ensure audio is contiguous in memory
-        y = np.ascontiguousarray(y, dtype=np.float32)
-        
-        # Final validation before processing
-        print(f"[TASK {task_id}] Final audio validation:")
-        print(f"[TASK {task_id}]   - Shape: {y.shape}")
-        print(f"[TASK {task_id}]   - Dtype: {y.dtype}")
-        print(f"[TASK {task_id}]   - Range: [{np.min(y):.6f}, {np.max(y):.6f}]")
-        print(f"[TASK {task_id}]   - Has NaN: {np.any(np.isnan(y))}")
-        print(f"[TASK {task_id}]   - Has Inf: {np.any(np.isinf(y))}")
-        print(f"[TASK {task_id}]   - Is numeric: {np.issubdtype(y.dtype, np.number)}")
-        
-        if not np.issubdtype(y.dtype, np.number):
-            raise RuntimeError("Audio data is not numeric - cannot proceed with chord detection")
-        
-        # Initialize madmom chord detection using the recommended two-step approach
-        print(f"[TASK {task_id}] Initializing madmom processors...")
-        try:
-            # Add debug info about madmom version and dependencies
-            import madmom
-            print(f"[TASK {task_id}] Madmom version: {madmom.__version__}")
-            
-            # Check NumPy version compatibility
-            print(f"[TASK {task_id}] NumPy version: {np.__version__}")
-            print(f"[TASK {task_id}] Librosa version: {librosa.__version__}")
-            
-            # Check for known compatibility issues
-            if hasattr(madmom, '__version__') and madmom.__version__:
-                print(f"[TASK {task_id}] Madmom version check completed")
-            else:
-                print(f"[TASK {task_id}] Warning: Could not determine madmom version")
-            
-            # Check what processors are actually available
-            try:
-                from madmom.features.chords import DeepChromaProcessor
-                print(f"[TASK {task_id}] DeepChromaProcessor is available")
-                chroma_processor_available = True
-            except ImportError:
-                print(f"[TASK {task_id}] DeepChromaProcessor not available, using single-step approach")
-                chroma_processor_available = False
-            
-            # Initialize madmom processors with recommended parameters
-            # Step 1: Chroma feature extraction
-            if chroma_processor_available:
-                chroma_processor = DeepChromaProcessor(
-                    sample_rate=44100,  # Standard sample rate
-                    hop_size=512,       # Frame hop size for good temporal resolution
-                    fps=50,            # 50 frames per second for smooth detection
-                    num_classes=25      # Standard number of chord classes
-                )
-                print(f"[TASK {task_id}] Chroma processor initialized successfully")
-            else:
-                print(f"[TASK {task_id}] Using single-step chord detection approach")
-            
-            # Initialize chord detector
-            chord_detector = DeepChromaChordRecognitionProcessor()
-            print(f"[TASK {task_id}] Chord detector initialized successfully")
-            
-        except Exception as e:
-            print(f"[TASK {task_id}] ERROR initializing madmom processor: {e}")
-            import traceback
-            traceback.print_exc()
-            raise RuntimeError(f"Failed to initialize madmom processor: {e}")
-        
-        # Start timing for progress estimation
-        start_time = time.time()
-        
-        # Initialize variables for chord processing with more conservative thresholds
-        filtered_out_count = 0
-        min_confidence = 0.5  # More conservative confidence threshold
-        min_chord_duration = 0.5  # Longer minimum chord duration
-        min_time_between_chords = 1.0  # More realistic for speech synthesis
-        valid_chords = []
-        
-        # Update progress: Starting chord detection (40-50%)
-        if task_id and task_id in tasks:
-            tasks[task_id]['step'] = 'Analyzing chord pattern'
-            tasks[task_id]['progress'] = 40
-            print(f"[TASK {task_id}] Progress: 40% - Starting chord detection")
-        
-        # Process the audio file with the chord detector
-        print(f"[TASK {task_id}] Starting chord detection...")
-        try:
-            print(f"[TASK {task_id}] Calling chord detection with audio_file: {audio_file}")
-            # Add debug info about the audio file
-            import os
-            if os.path.exists(audio_file):
-                file_size = os.path.getsize(audio_file)
-                print(f"[TASK {task_id}] Audio file size: {file_size} bytes")
-                
-                # Check if file is not empty
-                if file_size == 0:
-                    print(f"[TASK {task_id}] ERROR: Audio file is empty!")
-                    raise RuntimeError("Audio file is empty")
-                
-                # Try to validate the audio file format
-                try:
-                    import soundfile as sf
-                    info = sf.info(audio_file)
-                    print(f"[TASK {task_id}] Audio file format: {info.format}, subtype: {info.subtype}")
-                    if info.duration <= 0:
-                        print(f"[TASK {task_id}] ERROR: Audio file has zero duration!")
-                        raise RuntimeError("Audio file has zero duration")
-                except Exception as sf_error:
-                    print(f"[TASK {task_id}] Warning: Could not validate audio file with soundfile: {sf_error}")
-            else:
-                print(f"[TASK {task_id}] ERROR: Audio file does not exist: {audio_file}")
-                raise RuntimeError(f"Audio file not found: {audio_file}")
-            
-            try:
-                # Debug: Check what madmom is receiving
-                print(f"[TASK {task_id}] Audio file path: {audio_file}")
-                print(f"[TASK {task_id}] Audio file type: {type(audio_file)}")
-                
-                # Use the main chord detection approach
-                print(f"[TASK {task_id}] Using main chord detection approach...")
-                chords = chord_detector(audio_file)
-                print(f"[TASK {task_id}] Chord detection completed successfully")
-                
-            except Exception as chord_error:
-                print(f"[TASK {task_id}] ERROR during chord detection call: {chord_error}")
-                import traceback
-                traceback.print_exc()
-                raise RuntimeError(f"Chord detection failed: {chord_error}")
-                
-        except Exception as e:
-            print(f"[TASK {task_id}] ERROR in chord detection: {e}")
-            import traceback
-            traceback.print_exc()
-            raise RuntimeError(f"Chord detection failed: {e}")
+        update_task_progress(65, 'Chord detection complete')
         
         # Save chord data
         chords_file = os.path.join(task_dir, 'chords.json')
         with open(chords_file, 'w') as f:
-            json.dump(chords, f)
-        print(f"Chord data saved: {chords_file}")
+            json.dump(final_chords, f)
+        print(f"[TASK {task_id}] Chord data saved: {chords_file}")
         
         # Step 5: Voice synthesis using voice cloning
         print(f"\n=== [TASK {task_id}] STEP 5: VOICE SYNTHESIS ===")
-        tasks[task_id]['step'] = 'Synthesizing spoken chord overlay'
-        tasks[task_id]['progress'] = 70
-        print(f"[TASK {task_id}] Progress: 70% - Starting voice synthesis")
+        update_task_progress(70, 'Synthesizing spoken chord overlay')
         
-        tts_start = time.time()
-        unique_chords = list(set(chord_data['speech'] for chord_data in chords))
+        unique_chords = list(set(chord_data['speech'] for chord_data in final_chords))
         print(f"[TASK {task_id}] Unique chords to synthesize: {len(unique_chords)}")
-        print(f"[TASK {task_id}] Unique chords: {unique_chords}")
         
         tts_cache = {}
         
         # Update progress for each chord synthesis
         for i, chord_speech in enumerate(unique_chords):
-            # Update progress for each chord (70-85%) with whole numbers only
-            # Simple mapping: 0->70%, 1->72%, 2->75%, 3->77%, 4->80%, 5->82%, 6->85%
+            # Update progress for each chord (70-85%)
             if len(unique_chords) == 1:
                 chord_progress = 70
-            elif len(unique_chords) == 2:
-                chord_progress = 70 if i == 0 else 85
-            elif len(unique_chords) == 3:
-                chord_progress = 70 if i == 0 else (77 if i == 1 else 85)
-            elif len(unique_chords) == 4:
-                chord_progress = 70 if i == 0 else (75 if i == 1 else (80 if i == 2 else 85))
+            elif len(unique_chords) <= 5:
+                chord_progress = 70 + (i * 3)  # 70, 73, 76, 79, 82
             else:
-                # For 5+ chords, use simple increments
-                chord_progress = 70 + (i * 3)  # 70, 73, 76, 79, 82, 85
-                if chord_progress > 85:
-                    chord_progress = 85
+                chord_progress = 70 + min(i * 15 // len(unique_chords), 15)  # Scale to 70-85%
             
-            tasks[task_id]['progress'] = chord_progress
-            tasks[task_id]['step'] = f'Synthesizing chord {i+1}/{len(unique_chords)}'
-            print(f"[TASK {task_id}] Progress: {chord_progress}% - Synthesizing chord {i+1}/{len(unique_chords)}: {chord_speech}")
+            update_task_progress(chord_progress, f'Synthesizing chord {i+1}/{len(unique_chords)}')
             
             tts_output_path = os.path.join(task_dir, f'tts_{chord_speech.replace(" ", "_").replace("#", "sharp")}.wav')
             if not synthesize_chord_speech(chord_speech, voice_sample_path, tts_output_path):
                 error_msg = f"TTS synthesis failed for chord: {chord_speech}"
-                print(f"ERROR: {error_msg}")
+                print(f"[TASK {task_id}] ERROR: {error_msg}")
                 raise RuntimeError(error_msg)
             if os.path.exists(tts_output_path):
+                from pydub import AudioSegment
                 tts_cache[chord_speech] = AudioSegment.from_wav(tts_output_path)
-                print(f"Loaded TTS for '{chord_speech}': {len(tts_cache[chord_speech])}ms duration")
+                print(f"[TASK {task_id}] Loaded TTS for '{chord_speech}': {len(tts_cache[chord_speech])}ms duration")
             else:
                 error_msg = f"TTS output file not created for chord: {chord_speech}"
-                print(f"ERROR: {error_msg}")
+                print(f"[TASK {task_id}] ERROR: {error_msg}")
                 raise RuntimeError(error_msg)
         
         # Step 6: Creating chord audio track
-        print(f"Step 6: Creating chord audio track for task {task_id}")
-        tasks[task_id]['step'] = 'Creating chord audio track'
-        tasks[task_id]['progress'] = 85
-        print(f"[TASK {task_id}] Progress: 85% - Creating chord audio track")
+        print(f"\n=== [TASK {task_id}] STEP 6: CREATING CHORD AUDIO TRACK ===")
+        update_task_progress(85, 'Creating chord audio track')
+        
         from pydub import AudioSegment
         chord_audio_segments = []
-        for i, chord_data in enumerate(chords):
+        for i, chord_data in enumerate(final_chords):
             if i == 0:
                 silence_duration = chord_data['time'] * 1000
             else:
-                silence_duration = (chord_data['time'] - chords[i-1]['time']) * 1000
+                silence_duration = (chord_data['time'] - final_chords[i-1]['time']) * 1000
             if silence_duration > 0:
                 chord_audio_segments.append(AudioSegment.silent(duration=int(silence_duration)))
-                print(f"Added {int(silence_duration)}ms silence before chord {i+1}")
             chord_speech = chord_data['speech']
             if chord_speech in tts_cache:
                 speech_audio = tts_cache[chord_speech]
                 chord_audio_segments.append(speech_audio)
-                print(f"Added '{chord_speech}' at {chord_data['time']:.2f}s: {len(speech_audio)}ms duration")
             else:
                 beep = AudioSegment.sine(frequency=440, duration=200)
                 chord_audio_segments.append(beep)
-                print(f"Added fallback beep for '{chord_speech}' at {chord_data['time']:.2f}s")
         chord_track = sum(chord_audio_segments, AudioSegment.empty())
         
         # Step 7: Mixing final audio
-        print(f"Step 7: Mixing final audio for task {task_id}")
-        tasks[task_id]['step'] = 'Overlaying spoken chords onto instrumental track'
-        tasks[task_id]['progress'] = 90
-        print(f"[TASK {task_id}] Progress: 90% - Mixing final audio")
+        print(f"\n=== [TASK {task_id}] STEP 7: MIXING FINAL AUDIO ===")
+        update_task_progress(90, 'Overlaying spoken chords onto instrumental track')
+        
         # Use the WAV version that was created for chord detection
         instrumental_audio = AudioSegment.from_wav(instrumental_wav_path)
         if len(chord_track) < len(instrumental_audio):
@@ -1015,14 +704,10 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
         final_audio.export(output_path, format='mp3')
         
         # Complete
-        total_time = time.time() - start_time
+        update_task_progress(100, 'Complete')
         tasks[task_id]['status'] = 'completed'
-        tasks[task_id]['step'] = 'Complete'
-        tasks[task_id]['progress'] = 100
         tasks[task_id]['output_file'] = output_path
         print(f"\n=== [TASK {task_id}] PROCESSING COMPLETED ===")
-        print(f"[TASK {task_id}] Progress: 100% - Processing completed successfully")
-        print(f"[TASK {task_id}] Total processing time: {total_time:.2f} seconds ({total_time/60:.2f} minutes)")
         print(f"[TASK {task_id}] Output file: {output_path}")
         
     except Exception as e:
@@ -2018,18 +1703,101 @@ def process_audio_task(task_id, file_path):
             print(f"[TASK {task_id}]   {chord_info['chord']} at {chord_info['time']:.2f}s")
         
         # Update progress: Chord detection complete (65%)
-        if task_id and task_id in tasks:
-            tasks[task_id]['step'] = 'Analyzing chord pattern (complete)'
-            tasks[task_id]['progress'] = 65
-            print(f"[TASK {task_id}] Progress: 65% - Chord detection and processing complete")
+        update_task_progress(65, 'Chord detection complete')
         
-        return final_chords
+        # Save chord data
+        chords_file = os.path.join(task_dir, 'chords.json')
+        with open(chords_file, 'w') as f:
+            json.dump(final_chords, f)
+        print(f"[TASK {task_id}] Chord data saved: {chords_file}")
+        
+        # Step 5: Voice synthesis using voice cloning
+        print(f"\n=== [TASK {task_id}] STEP 5: VOICE SYNTHESIS ===")
+        update_task_progress(70, 'Synthesizing spoken chord overlay')
+        
+        unique_chords = list(set(chord_data['speech'] for chord_data in final_chords))
+        print(f"[TASK {task_id}] Unique chords to synthesize: {len(unique_chords)}")
+        
+        tts_cache = {}
+        
+        # Update progress for each chord synthesis
+        for i, chord_speech in enumerate(unique_chords):
+            # Update progress for each chord (70-85%)
+            if len(unique_chords) == 1:
+                chord_progress = 70
+            elif len(unique_chords) <= 5:
+                chord_progress = 70 + (i * 3)  # 70, 73, 76, 79, 82
+            else:
+                chord_progress = 70 + min(i * 15 // len(unique_chords), 15)  # Scale to 70-85%
+            
+            update_task_progress(chord_progress, f'Synthesizing chord {i+1}/{len(unique_chords)}')
+            
+            tts_output_path = os.path.join(task_dir, f'tts_{chord_speech.replace(" ", "_").replace("#", "sharp")}.wav')
+            if not synthesize_chord_speech(chord_speech, voice_sample_path, tts_output_path):
+                error_msg = f"TTS synthesis failed for chord: {chord_speech}"
+                print(f"[TASK {task_id}] ERROR: {error_msg}")
+                raise RuntimeError(error_msg)
+            if os.path.exists(tts_output_path):
+                from pydub import AudioSegment
+                tts_cache[chord_speech] = AudioSegment.from_wav(tts_output_path)
+                print(f"[TASK {task_id}] Loaded TTS for '{chord_speech}': {len(tts_cache[chord_speech])}ms duration")
+            else:
+                error_msg = f"TTS output file not created for chord: {chord_speech}"
+                print(f"[TASK {task_id}] ERROR: {error_msg}")
+                raise RuntimeError(error_msg)
+        
+        # Step 6: Creating chord audio track
+        print(f"\n=== [TASK {task_id}] STEP 6: CREATING CHORD AUDIO TRACK ===")
+        update_task_progress(85, 'Creating chord audio track')
+        
+        from pydub import AudioSegment
+        chord_audio_segments = []
+        for i, chord_data in enumerate(final_chords):
+            if i == 0:
+                silence_duration = chord_data['time'] * 1000
+            else:
+                silence_duration = (chord_data['time'] - final_chords[i-1]['time']) * 1000
+            if silence_duration > 0:
+                chord_audio_segments.append(AudioSegment.silent(duration=int(silence_duration)))
+            chord_speech = chord_data['speech']
+            if chord_speech in tts_cache:
+                speech_audio = tts_cache[chord_speech]
+                chord_audio_segments.append(speech_audio)
+            else:
+                beep = AudioSegment.sine(frequency=440, duration=200)
+                chord_audio_segments.append(beep)
+        chord_track = sum(chord_audio_segments, AudioSegment.empty())
+        
+        # Step 7: Mixing final audio
+        print(f"\n=== [TASK {task_id}] STEP 7: MIXING FINAL AUDIO ===")
+        update_task_progress(90, 'Overlaying spoken chords onto instrumental track')
+        
+        # Use the WAV version that was created for chord detection
+        instrumental_audio = AudioSegment.from_wav(instrumental_wav_path)
+        if len(chord_track) < len(instrumental_audio):
+            chord_track += AudioSegment.silent(duration=len(instrumental_audio) - len(chord_track))
+        elif len(chord_track) > len(instrumental_audio):
+            chord_track = chord_track[:len(instrumental_audio)]
+        final_audio = instrumental_audio.overlay(chord_track - 3)
+        output_path = os.path.join(task_dir, 'final.mp3')
+        final_audio.export(output_path, format='mp3')
+        
+        # Complete
+        update_task_progress(100, 'Complete')
+        tasks[task_id]['status'] = 'completed'
+        tasks[task_id]['output_file'] = output_path
+        print(f"\n=== [TASK {task_id}] PROCESSING COMPLETED ===")
+        print(f"[TASK {task_id}] Output file: {output_path}")
         
     except Exception as e:
-        print(f"[TASK {task_id}] ERROR in chord detection: {e}")
+        print(f"\n=== [TASK {task_id}] PROCESSING ERROR ===")
+        print(f"[TASK {task_id}] ERROR: {e}")
         import traceback
         traceback.print_exc()
-        raise RuntimeError(f"Chord detection failed: {e}")
+        tasks[task_id]['status'] = 'error'
+        tasks[task_id]['error'] = str(e)
+        tasks[task_id]['step'] = f'Error: {str(e)}'
+        print(f"[TASK {task_id}] Processing error for task {task_id}: {e}")
 
 if __name__ == '__main__':
     import os
