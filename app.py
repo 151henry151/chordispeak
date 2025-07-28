@@ -122,7 +122,7 @@ MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB max file size
 
 # Pronunciation strategy configuration
 # Options: 'ipa', 'dots', 'words', 'nato', 'simple', 'spelled', 'compact'
-PRONUNCIATION_STRATEGY = 'dots'  # Use dots strategy for clearer letter pronunciation
+PRONUNCIATION_STRATEGY = 'ipa'  # Use IPA phonemes for precise pronunciation
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
@@ -229,7 +229,7 @@ def chord_to_ipa_phonemes(chord):
         }
     elif PRONUNCIATION_STRATEGY == 'compact':
         letter_phonemes = {
-            'A': 'AAY', 'B': 'BEE', 'C': 'SEE', 'D': 'DEE', 'E': 'EE', 'F': 'EFF', 'G': 'GEE'
+            'A': 'letter A', 'B': 'BEE', 'C': 'SEE', 'D': 'letter D', 'E': 'EE', 'F': 'EFF', 'G': 'GEE'
         }
         # Use more compact modifiers for better timing
         modifiers = {
