@@ -230,7 +230,7 @@
             background: rgba(0, 0, 0, 0.7);
             padding: 2px 6px;
             border-radius: 4px;
-            opacity: 0.9;
+            opacity: 0.6;
         }
 
         .task-log-line {
@@ -1404,12 +1404,28 @@
         }
 
         // Task log functionality
+        function truncateTaskId(taskId) {
+            if (!taskId) return '';
+            // Extract the first 5 characters and add ellipsis
+            return taskId.substring(0, 5) + '...';
+        }
+
         function addTaskLog(message) {
             // Clear previous log and show new one
             taskLogDisplay.innerHTML = '';
             const logLine = document.createElement('div');
             logLine.className = 'task-log-line new';
-            logLine.textContent = `[TASK] ${message}`;
+            
+            // Truncate task IDs in the message
+            let processedMessage = message;
+            if (message.includes('[TASK ')) {
+                // Find and replace task IDs with truncated versions
+                processedMessage = message.replace(/\[TASK ([a-f0-9-]+)\]/g, (match, taskId) => {
+                    return `[TASK ${truncateTaskId(taskId)}]`;
+                });
+            }
+            
+            logLine.textContent = `[TASK] ${processedMessage}`;
             taskLogDisplay.appendChild(logLine);
             
             // Remove animation class after animation completes
@@ -1480,6 +1496,9 @@
                     console.log('Status update:', status);
                     console.log('Backend progress:', status.progress);
                     console.log('Backend step:', status.step);
+                    console.log('Status type:', typeof status.progress);
+                    console.log('Progress is null?', status.progress === null);
+                    console.log('Progress is undefined?', status.progress === undefined);
                     
                     // Fetch and update task logs
                     const taskLogs = await fetchTaskLogs(currentTaskId);

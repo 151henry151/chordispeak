@@ -1755,6 +1755,9 @@ def process_audio_task(task_id, file_path):
     task_dir = os.path.join(UPLOAD_FOLDER, task_id)
     os.makedirs(task_dir, exist_ok=True)
     
+    # Set task status to processing
+    tasks[task_id]['status'] = 'processing'
+    
     # Log the start of the task
     log_debug(task_id, f"Task {task_id} started. File: {file_path}")
     
