@@ -440,8 +440,8 @@ def detect_vocal_content(audio_path, min_vocal_duration=20.0):
         traceback.print_exc()
         return False
 
-def extract_voice_sample(vocals_path, sample_duration=None):
-    """Extract voice sample from separated vocals for voice cloning"""
+def extract_voice_sample(vocals_path, sample_duration=10.0):
+    """Extract the first 10 seconds of actual singing for consistent voice cloning"""
     print(f"extract_voice_sample called with vocals_path: {vocals_path}")
     
     if not lazy_import_audio_deps():
@@ -450,18 +450,127 @@ def extract_voice_sample(vocals_path, sample_duration=None):
         
     try:
         print(f"Loading vocals with librosa from: {vocals_path}")
-        # Use the full vocal track for better voice cloning
         y, sr = librosa.load(vocals_path)
-        print(f"Vocals loaded successfully: shape={y.shape}, sr={sr}")
+        print(f"Vocals loaded successfully: shape={y.shape}, sr={sr}, duration={len(y)/sr:.2f}s")
         
-        # Return the entire vocal track
-        return y, sr
+        # Find vocal activity to detect when singing starts
+        vocal_start_time, vocal_segment = detect_vocal_activity_and_extract(y, sr, sample_duration)
+        
+        if vocal_segment is not None:
+            print(f"Extracted {sample_duration}s vocal sample starting at {vocal_start_time:.2f}s")
+            return vocal_segment, sr
+        else:
+            print("No sufficient vocal activity found, using first 10 seconds as fallback")
+            # Fallback: use first 10 seconds if no vocal activity detected
+            fallback_samples = int(sample_duration * sr)
+            if len(y) >= fallback_samples:
+                return y[:fallback_samples], sr
+            else:
+                return y, sr
         
     except Exception as e:
         print(f"Voice sample extraction error: {e}")
         import traceback
         traceback.print_exc()
         return None, None
+
+def detect_vocal_activity_and_extract(y, sr, target_duration=10.0):
+    """Detect vocal activity and extract the first continuous segment of singing"""
+    print("Analyzing vocal activity...")
+    
+    # Parameters for vocal activity detection
+    frame_length = int(0.025 * sr)  # 25ms frames
+    hop_length = int(0.010 * sr)    # 10ms hop (overlap for better detection)
+    
+    # Calculate spectral features for vocal detection
+    # 1. RMS Energy (volume)
+    rms = librosa.feature.rms(y=y, frame_length=frame_length, hop_length=hop_length)[0]
+    
+    # 2. Spectral Centroid (brightness - vocals tend to have higher frequencies)
+    spectral_centroid = librosa.feature.spectral_centroid(y=y, sr=sr, hop_length=hop_length)[0]
+    
+    # 3. Zero Crossing Rate (speech characteristics)
+    zcr = librosa.feature.zero_crossing_rate(y, frame_length=frame_length, hop_length=hop_length)[0]
+    
+    # Normalize features
+    rms_norm = rms / (np.max(rms) + 1e-8)
+    centroid_norm = spectral_centroid / (np.max(spectral_centroid) + 1e-8)
+    zcr_norm = zcr / (np.max(zcr) + 1e-8)
+    
+    # Combine features to detect vocal activity
+    # RMS > threshold (sufficient volume)
+    # Spectral centroid in vocal range (not too low/high)
+    # ZCR in speech range (not too low like pure tones, not too high like noise)
+    
+    rms_threshold = 0.15      # Minimum volume for vocals
+    centroid_min = 0.3        # Minimum brightness (filter out low rumbles)
+    centroid_max = 0.8        # Maximum brightness (filter out very high noise)
+    zcr_min = 0.1            # Minimum zero crossings (filter out pure tones)
+    zcr_max = 0.7            # Maximum zero crossings (filter out noise)
+    
+    # Create vocal activity mask
+    vocal_mask = (
+        (rms_norm > rms_threshold) &
+        (centroid_norm > centroid_min) & (centroid_norm < centroid_max) &
+        (zcr_norm > zcr_min) & (zcr_norm < zcr_max)
+    )
+    
+    print(f"Vocal activity detection: {np.sum(vocal_mask)}/{len(vocal_mask)} frames positive")
+    
+    # Convert frame indices to time
+    frame_times = librosa.frames_to_time(np.arange(len(vocal_mask)), sr=sr, hop_length=hop_length)
+    
+    # Find continuous vocal segments
+    target_samples = int(target_duration * sr)
+    min_segment_duration = 5.0  # Minimum 5 seconds of continuous vocal activity
+    min_segment_frames = int(min_segment_duration * sr / hop_length)
+    
+    # Find the first long enough continuous segment
+    segment_start = None
+    current_segment_start = None
+    current_segment_length = 0
+    
+    for i, is_vocal in enumerate(vocal_mask):
+        if is_vocal:
+            if current_segment_start is None:
+                current_segment_start = i
+                current_segment_length = 1
+            else:
+                current_segment_length += 1
+        else:
+            # End of vocal segment
+            if current_segment_start is not None and current_segment_length >= min_segment_frames:
+                # Found a good segment
+                segment_start = current_segment_start
+                break
+            current_segment_start = None
+            current_segment_length = 0
+    
+    # Check the last segment if we didn't find one yet
+    if segment_start is None and current_segment_start is not None and current_segment_length >= min_segment_frames:
+        segment_start = current_segment_start
+    
+    if segment_start is not None:
+        # Convert frame index to sample index
+        start_time = frame_times[segment_start]
+        start_sample = int(start_time * sr)
+        end_sample = min(start_sample + target_samples, len(y))
+        
+        print(f"Found vocal segment starting at {start_time:.2f}s")
+        return start_time, y[start_sample:end_sample]
+    else:
+        # No good vocal segment found, try to find any vocal activity
+        if np.any(vocal_mask):
+            first_vocal_frame = np.where(vocal_mask)[0][0]
+            start_time = frame_times[first_vocal_frame]
+            start_sample = int(start_time * sr)
+            end_sample = min(start_sample + target_samples, len(y))
+            
+            print(f"Using first vocal activity at {start_time:.2f}s (no long continuous segment found)")
+            return start_time, y[start_sample:end_sample]
+        else:
+            print("No vocal activity detected")
+            return None, None
 
 def synthesize_chord_speech_coqui(text, voice_sample_path, output_path):
     """Generate speech using Coqui XTTS v2 voice cloning with phoneme support"""
@@ -1834,11 +1943,29 @@ def process_audio_task(task_id, file_path):
         if not os.path.exists(vocal_path):
             raise RuntimeError(f"Vocal track not found after Demucs separation. Expected: {vocal_path}")
         
-        # Convert MP3 to WAV for voice cloning
-        from pydub import AudioSegment
-        vocal_audio = AudioSegment.from_mp3(vocal_path)
-        vocal_audio.export(voice_sample_path, format='wav')
-        print(f"[TASK {task_id}] Voice sample extracted: {voice_sample_path}")
+        # Extract optimized voice sample using vocal activity detection
+        print(f"[TASK {task_id}] Analyzing vocals for optimal 10-second voice sample...")
+        y_vocal, sr_vocal = extract_voice_sample(vocal_path, sample_duration=10.0)
+        
+        if y_vocal is not None and sr_vocal is not None:
+            # Save the optimized voice sample
+            import scipy.io.wavfile as wavfile
+            # Convert float32 to int16 for WAV format
+            y_vocal_int16 = (y_vocal * 32767).astype(np.int16)
+            wavfile.write(voice_sample_path, sr_vocal, y_vocal_int16)
+            
+            sample_duration = len(y_vocal) / sr_vocal
+            print(f"[TASK {task_id}] Optimized voice sample extracted: {voice_sample_path} ({sample_duration:.2f}s)")
+        else:
+            # Fallback: use original method if vocal activity detection fails
+            print(f"[TASK {task_id}] Vocal activity detection failed, using fallback method...")
+            from pydub import AudioSegment
+            vocal_audio = AudioSegment.from_mp3(vocal_path)
+            # Use first 10 seconds as fallback
+            if len(vocal_audio) > 10000:  # 10 seconds in milliseconds
+                vocal_audio = vocal_audio[:10000]
+            vocal_audio.export(voice_sample_path, format='wav')
+            print(f"[TASK {task_id}] Fallback voice sample extracted: {voice_sample_path}")
         
         # Step 4: Chord detection
         print(f"\n=== [TASK {task_id}] STEP 4: CHORD DETECTION ===")
