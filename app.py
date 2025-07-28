@@ -924,8 +924,21 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
             
             # Convert speech key back to original format for synthesis
             if '|' in chord_speech_key:
-                # Split synthesis - convert back to list
-                chord_speech = chord_speech_key.split('|')
+                # Split synthesis - find original chord name instead of using split components
+                # Find the chord that matches this speech pattern
+                original_chord = None
+                for chord_data in final_chords:
+                    if isinstance(chord_data['speech'], list):
+                        if '|'.join(chord_data['speech']) == chord_speech_key:
+                            original_chord = chord_data['chord']
+                            break
+                
+                if original_chord:
+                    chord_speech = original_chord  # Use original chord name like 'Em'
+                else:
+                    # Fallback: reconstruct from cache key (less reliable)
+                    chord_speech = chord_speech_key.replace('|', '')  # 'E.MINOR' -> 'E.MINOR'
+                
                 safe_filename = chord_speech_key.replace("|", "_").replace(" ", "_").replace("#", "sharp")
             else:
                 # Regular synthesis - use as string
