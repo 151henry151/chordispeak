@@ -218,35 +218,19 @@
             left: 10px;
             right: 10px;
             transform: translateY(-50%);
-            color: #00ff00;
-            font-family: 'Courier New', monospace;
-            font-size: 10px;
-            line-height: 1.2;
+            color: white;
+            font-size: 12px;
+            font-weight: 500;
             white-space: nowrap;
             overflow: hidden;
-            z-index: 4;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
-            background: rgba(0, 0, 0, 0.7);
-            padding: 2px 6px;
-            border-radius: 4px;
+            text-overflow: ellipsis;
             opacity: 0.6;
+            pointer-events: none;
+            z-index: 10;
         }
-
+        
         .task-log-line {
-            margin: 0;
-            word-wrap: break-word;
-            display: inline-block;
-            animation: tickerScrollLeft 3s linear;
-            transform: translateX(0);
-        }
-
-        @keyframes tickerScrollLeft {
-            0% {
-                transform: translateX(0);
-            }
-            100% {
-                transform: translateX(calc(-100% + 100px));
-            }
+            width: 100%;
         }
 
         /* Progress overlay */
@@ -1398,9 +1382,7 @@
             // Show main debug section immediately
             mainDebugSection.style.display = 'block';
             // Initialize task log display
-            taskLogDisplay.innerHTML = `
-                <div class="task-log-line">[TASK] Initializing ChordiSpeak...</div>
-            `;
+            taskLogDisplay.textContent = '[TASK] Initializing ChordiSpeak...';
             // Start debug polling after a few seconds
             setTimeout(() => {
                 startDebugPolling();
@@ -1422,11 +1404,6 @@
                 console.log('Skipping duplicate message:', message);
                 return;
             }
-            
-            // Clear previous logs to show only one message at a time
-            taskLogDisplay.innerHTML = '';
-            const logLine = document.createElement('div');
-            logLine.className = 'task-log-line';
             
             console.log('Original message:', message);
             
@@ -1451,11 +1428,8 @@
             // Update last displayed message
             lastDisplayedMessage = message;
             
-            // Don't add another [TASK] prefix since the message already has it
-            logLine.textContent = processedMessage;
-            taskLogDisplay.appendChild(logLine);
-            
-            // Don't auto-clear - let it stay until the next message appears
+            // Simply replace the text content
+            taskLogDisplay.textContent = processedMessage;
         }
 
         async function fetchTaskLogs(taskId) {
