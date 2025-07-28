@@ -1224,6 +1224,7 @@
         // Global variables
         let currentTaskId = null;
         let isProcessing = false;
+        let currentProgress = 0; // Track current progress to prevent backwards movement
 
         // DOM elements
         const fileInput = document.getElementById('fileInput');
@@ -1400,6 +1401,7 @@
         function showProgress() {
             progressModal.classList.add('show');
             resultsContainer.style.display = 'none';
+            currentProgress = 0; // Reset progress tracking for new process
             updateProgress(0, 'Initializing...', 'Starting');
             // Hide close modal button for new processes
             closeModalBtn.style.display = 'none';
@@ -1468,6 +1470,14 @@
         }
 
         function updateProgress(percentage, text, status) {
+            // Prevent progress from going backwards
+            if (percentage < currentProgress) {
+                console.warn(`Progress attempted to go backwards: ${currentProgress}% -> ${percentage}%. Keeping at ${currentProgress}%`);
+                percentage = currentProgress;
+            } else {
+                currentProgress = percentage;
+            }
+            
             progressPercentage.textContent = `${percentage}%`;
             progressText.textContent = text;
             progressStatus.textContent = status;

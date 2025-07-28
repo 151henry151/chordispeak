@@ -1760,12 +1760,26 @@ def process_audio_task(task_id, file_path):
     # Log the start of the task
     log_debug(task_id, f"Task {task_id} started. File: {file_path}")
     
+    # Track progress to prevent backwards movement
+    current_backend_progress = 0
+    
+    def update_task_progress(progress, step):
+        """Safely update task progress, preventing backwards movement"""
+        nonlocal current_backend_progress
+        if progress < current_backend_progress:
+            print(f"[TASK {task_id}] WARNING: Progress attempted to go backwards: {current_backend_progress}% -> {progress}%. Keeping at {current_backend_progress}%")
+            progress = current_backend_progress
+        else:
+            current_backend_progress = progress
+        
+        tasks[task_id]['progress'] = progress
+        tasks[task_id]['step'] = step
+        print(f"[TASK {task_id}] Progress: {progress}% - {step}")
+    
     try:
         # Step 1: Audio preparation
         print(f"\n=== [TASK {task_id}] STEP 1: AUDIO PREPARATION ===")
-        tasks[task_id]['step'] = 'Preparing audio file'
-        tasks[task_id]['progress'] = 10
-        print(f"[TASK {task_id}] Progress: 10% - Preparing audio file")
+        update_task_progress(10, 'Preparing audio file')
         
         # Convert to WAV for processing
         from pydub import AudioSegment
@@ -1776,9 +1790,7 @@ def process_audio_task(task_id, file_path):
         
         # Step 2: Vocal separation with Demucs
         print(f"\n=== [TASK {task_id}] STEP 2: VOCAL SEPARATION ===")
-        tasks[task_id]['step'] = 'Splitting vocal & instrumental'
-        tasks[task_id]['progress'] = 15
-        print(f"[TASK {task_id}] Progress: 15% - Starting vocal separation")
+        update_task_progress(15, 'Splitting vocal & instrumental')
         
         task_dir = os.path.dirname(input_path)
         
@@ -1812,15 +1824,11 @@ def process_audio_task(task_id, file_path):
         print(f"[TASK {task_id}] Demucs separation completed successfully")
         
         # Update progress
-        tasks[task_id]['step'] = 'Vocal separation complete'
-        tasks[task_id]['progress'] = 30
-        print(f"[TASK {task_id}] Progress: 30% - Vocal separation complete")
+        update_task_progress(30, 'Vocal separation complete')
         
         # Step 3: Voice sample extraction
         print(f"\n=== [TASK {task_id}] STEP 3: VOICE SAMPLE EXTRACTION ===")
-        tasks[task_id]['step'] = 'Extracting voice sample'
-        tasks[task_id]['progress'] = 35
-        print(f"[TASK {task_id}] Progress: 35% - Extracting voice sample")
+        update_task_progress(35, 'Extracting voice sample')
         
         # Find Demucs output files
         demucs_output_dir = os.path.join(task_dir, 'htdemucs')
@@ -1856,9 +1864,7 @@ def process_audio_task(task_id, file_path):
         
         # Step 4: Chord detection
         print(f"\n=== [TASK {task_id}] STEP 4: CHORD DETECTION ===")
-        tasks[task_id]['step'] = 'Analyzing chord pattern'
-        tasks[task_id]['progress'] = 40
-        print(f"[TASK {task_id}] Progress: 40% - Starting chord detection")
+        update_task_progress(40, 'Analyzing chord pattern')
         
         # Check if instrumental file exists
         if not os.path.exists(instrumental_path):
