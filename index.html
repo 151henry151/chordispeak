@@ -1399,13 +1399,7 @@
         }
 
         function addTaskLog(message) {
-            // Check for duplicate messages
-            if (message === lastDisplayedMessage) {
-                console.log('Skipping duplicate message:', message);
-                return;
-            }
-            
-            console.log('Original message:', message);
+            console.log('Adding task log:', message);
             
             // Truncate task IDs in the message
             let processedMessage = message;
@@ -1425,18 +1419,18 @@
             
             console.log('Processed message:', processedMessage);
             
-            // Update last displayed message
-            lastDisplayedMessage = message;
-            
-            // Simply replace the text content
+            // Update the display with the new message (no duplicate checking for live updates)
             taskLogDisplay.textContent = processedMessage;
+            
+            // Update last displayed message for tracking
+            lastDisplayedMessage = message;
         }
 
         async function fetchTaskLogs(taskId) {
             try {
                 const response = await fetch(`/logs/${taskId}`);
                 if (response.ok) {
-                    const logs = await response.text();
+                    const logs = await response.text(); // Plain text, not JSON
                     return logs;
                 }
             } catch (error) {
@@ -1766,8 +1760,8 @@
                 try {
                     const response = await fetch(`/logs/${currentTaskId}`);
                     if (response.ok) {
-                        const data = await response.json();
-                        updateDebugLogs(data.logs);
+                        const data = await response.text(); // Plain text, not JSON
+                        updateDebugLogs(data);
                     }
                 } catch (error) {
                     console.error('Error fetching debug logs:', error);
@@ -1775,14 +1769,14 @@
             }, 2000);
         }
 
-        function updateDebugLogs(logs) {
-            if (!logs || logs.length === 0) {
+        function updateDebugLogs(logsText) {
+            if (!logsText) {
                 mainDebugLogs.innerHTML = '<p>No debug logs available yet...</p>';
                 return;
             }
             
-            const logText = logs.join('\n');
-            mainDebugLogs.textContent = logText;
+            // Display all logs in the main debug section
+            mainDebugLogs.textContent = logsText;
             mainDebugLogs.scrollTop = mainDebugLogs.scrollHeight; // Auto-scroll to bottom
         }
 

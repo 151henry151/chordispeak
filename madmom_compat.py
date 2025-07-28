@@ -105,10 +105,14 @@ def detect_chords_official_approach(audio_file, task_id=None):
 
 def detect_chords_simple(audio_file, task_id=None):
     """
-    Simple chord detection using madmom following the official documentation exactly.
+    Chord detection using the official DCChordRecognition approach.
     
-    This implementation follows the madmom documentation examples at:
-    https://best-of-web.builder.io/library/CPJKU/madmom
+    This follows the two-step process used by the official madmom command-line tool:
+    1. DeepChromaProcessor - Extract chroma features
+    2. DeepChromaChordRecognitionProcessor - Recognize chords from chroma features
+    
+    Based on the official implementation at:
+    https://github.com/CPJKU/madmom/blob/main/bin/DCChordRecognition
     
     Args:
         audio_file (str): Path to the audio file
@@ -117,31 +121,37 @@ def detect_chords_simple(audio_file, task_id=None):
     Returns:
         list: List of chord detections with timing information
     """
-    print(f"[TASK {task_id}] Starting madmom chord detection following official examples")
+    print(f"[TASK {task_id}] Starting official DCChordRecognition approach")
     
     try:
-        # Import madmom modules following the official examples
+        # Import madmom modules following the official tool
         import madmom
-        from madmom.features.chords import DeepChromaChordRecognitionProcessor
+        from madmom.audio import DeepChromaProcessor
+        from madmom.features import DeepChromaChordRecognitionProcessor
         
         print(f"[TASK {task_id}] Madmom version: {madmom.__version__}")
         
-        # Step 1: Create processor following the official example exactly
-        print(f"[TASK {task_id}] Creating DeepChromaChordRecognitionProcessor...")
-        proc = DeepChromaChordRecognitionProcessor()
-        print(f"[TASK {task_id}] Processor created successfully")
+        # Step 1: Extract chroma features with DeepChromaProcessor
+        print(f"[TASK {task_id}] Step 1: Extracting chroma features with DeepChromaProcessor...")
+        chroma_processor = DeepChromaProcessor()
+        chroma_features = chroma_processor(audio_file)
+        print(f"[TASK {task_id}] Chroma features extracted: shape={chroma_features.shape}")
         
-        # Step 2: Process audio file directly (as shown in official examples)
-        print(f"[TASK {task_id}] Processing audio file: {audio_file}")
-        chords = proc(audio_file)
+        # Step 2: Recognize chords from chroma features  
+        print(f"[TASK {task_id}] Step 2: Recognizing chords with DeepChromaChordRecognitionProcessor...")
+        chord_processor = DeepChromaChordRecognitionProcessor()
+        chords = chord_processor(chroma_features)
+        print(f"[TASK {task_id}] Official approach completed: {len(chords)} segments")
         
-        print(f"[TASK {task_id}] Chord detection completed: {len(chords)} segments")
+        # Step 3: Convert results to expected format
+        if hasattr(chords, 'tolist'):
+            print(f"[TASK {task_id}] Converting numpy array to list format")
+            chords = chords.tolist()
         
-        # Step 3: Process results following the official example format
         if chords and len(chords) > 0:
             print(f"[TASK {task_id}] Successfully detected {len(chords)} chord segments")
             
-            # Show first few chords for debugging (following official example format)
+            # Show first few chords for debugging
             print(f"[TASK {task_id}] First 5 chords:")
             for i, chord in enumerate(chords[:5]):
                 if len(chord) >= 2:
@@ -155,13 +165,10 @@ def detect_chords_simple(audio_file, task_id=None):
             return []
         
     except Exception as e:
-        print(f"[TASK {task_id}] Error in chord detection: {e}")
+        print(f"[TASK {task_id}] Error in official DCChordRecognition approach: {e}")
         import traceback
         traceback.print_exc()
-        
-        # Fallback to official approach if simple approach fails
-        print(f"[TASK {task_id}] Simple approach failed, trying official DCChordRecognition approach...")
-        return detect_chords_official_approach(audio_file, task_id)
+        raise RuntimeError(f"DCChordRecognition failed: {e}")
 
 def detect_chords_chroma_fallback(audio_file, task_id=None):
     """

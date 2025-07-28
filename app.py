@@ -1434,6 +1434,36 @@ def get_gpu_info():
     
     return jsonify(gpu_info)
 
+def convert_madmom_chord(madmom_label):
+    """Convert madmom chord labels to our chord format"""
+    # madmom uses labels like 'C:maj', 'C:min', 'C:7', etc.
+    if ':' not in madmom_label:
+        return madmom_label
+    
+    root, quality = madmom_label.split(':')
+    
+    # Convert quality to our format
+    if quality == 'maj':
+        return root
+    elif quality == 'min':
+        return root + 'm'
+    elif quality == '7':
+        return root + '7'
+    elif quality == 'maj7':
+        return root + 'maj7'
+    elif quality == 'min7':
+        return root + 'm7'
+    elif quality == 'dim':
+        return root + 'dim'
+    elif quality == 'aug':
+        return root + 'aug'
+    elif quality == 'sus2':
+        return root + 'sus2'
+    elif quality == 'sus4':
+        return root + 'sus4'
+    else:
+        return madmom_label  # Return as-is for unknown qualities
+
 def process_audio_task(task_id, file_path):
     """Background task to process an uploaded audio file."""
     print(f"Processing task {task_id} with file {file_path}")
@@ -1460,6 +1490,7 @@ def process_audio_task(task_id, file_path):
         
         tasks[task_id]['progress'] = progress
         tasks[task_id]['step'] = step
+        log_debug(task_id, f"Progress: {progress}% - {step}")
         print(f"[TASK {task_id}] Progress: {progress}% - {step}")
     
     try:
@@ -1476,7 +1507,7 @@ def process_audio_task(task_id, file_path):
         
         # Step 2: Vocal separation with Demucs
         print(f"\n=== [TASK {task_id}] STEP 2: VOCAL SEPARATION ===")
-        update_task_progress(15, 'Splitting vocal & instrumental')
+        update_task_progress(10, 'Starting vocal separation')
         
         task_dir = os.path.dirname(input_path)
         
@@ -1486,6 +1517,7 @@ def process_audio_task(task_id, file_path):
             '--mp3', '--mp3-bitrate', '128', input_path
         ]
         
+        log_debug(task_id, f"Running Demucs: {' '.join(demucs_cmd)}")
         print(f"[TASK {task_id}] Running Demucs: {' '.join(demucs_cmd)}")
         process = subprocess.Popen(
             demucs_cmd,
@@ -1497,9 +1529,63 @@ def process_audio_task(task_id, file_path):
         
         # Monitor Demucs progress
         demucs_output = []
+        import re
+        import time
+        last_demucs_progress = 0
+        start_time = time.time()
+        last_progress_update = time.time()
+        fallback_progress = 10
+        
         for line in process.stdout:
             demucs_output.append(line.strip())
-            if 'progress' in line.lower() or '%' in line:
+            current_time = time.time()
+            
+            # Parse Demucs progress output
+            # Demucs outputs progress in various formats like "100%|██████████| 1/1 [00:30<00:00, 30.00s/it]"
+            # or simpler percentage formats
+            line_lower = line.lower().strip()
+            progress_updated = False
+            
+            # Look for percentage patterns in the output
+            percent_matches = re.findall(r'(\d+)%', line)
+            if percent_matches:
+                try:
+                    demucs_percent = int(percent_matches[0])  # Take the first percentage found
+                    
+                    # Only update if progress has actually increased
+                    if demucs_percent > last_demucs_progress:
+                        last_demucs_progress = demucs_percent
+                        
+                        # Map Demucs 0-100% to our 10-25% range
+                        mapped_progress = 10 + int(demucs_percent * 15 / 100)  # Maps 0->10, 100->25
+                        mapped_progress = min(25, max(10, mapped_progress))  # Ensure bounds
+                        
+                        update_task_progress(mapped_progress, f'Separating vocals ({demucs_percent}%)')
+                        log_debug(task_id, f"Demucs progress: {demucs_percent}% -> Frontend: {mapped_progress}%")
+                        print(f"[TASK {task_id}] Demucs progress: {demucs_percent}% -> Frontend: {mapped_progress}%")
+                        last_progress_update = current_time
+                        fallback_progress = mapped_progress
+                        progress_updated = True
+                
+                except (ValueError, IndexError):
+                    pass
+            
+            # Fallback: If no progress info from Demucs for 10+ seconds, increment gradually
+            if not progress_updated and (current_time - last_progress_update) > 10 and fallback_progress < 24:
+                fallback_progress = min(24, fallback_progress + 1)
+                update_task_progress(fallback_progress, 'Separating vocals...')
+                log_debug(task_id, f"Fallback progress update: {fallback_progress}%")
+                print(f"[TASK {task_id}] Fallback progress update: {fallback_progress}%")
+                last_progress_update = current_time
+            
+            # Also look for other progress indicators
+            if any(indicator in line_lower for indicator in ['processing', 'separating', 'analyzing']):
+                log_debug(task_id, f"Demucs: {line.strip()}")
+                print(f"[TASK {task_id}] Demucs: {line.strip()}")
+            
+            # Print important Demucs output
+            if any(keyword in line_lower for keyword in ['error', 'warning', 'failed', 'complete', 'done']):
+                log_debug(task_id, f"Demucs: {line.strip()}")
                 print(f"[TASK {task_id}] Demucs: {line.strip()}")
         
         process.wait()
@@ -1509,12 +1595,12 @@ def process_audio_task(task_id, file_path):
         
         print(f"[TASK {task_id}] Demucs separation completed successfully")
         
-        # Update progress
-        update_task_progress(30, 'Vocal separation complete')
+        # Ensure we're at 25% after Demucs completion, then move to 30%
+        update_task_progress(25, 'Vocal separation complete')
+        update_task_progress(30, 'Extracting voice sample')
         
         # Step 3: Voice sample extraction
         print(f"\n=== [TASK {task_id}] STEP 3: VOICE SAMPLE EXTRACTION ===")
-        update_task_progress(35, 'Extracting voice sample')
         
         # Find Demucs output files
         demucs_output_dir = os.path.join(task_dir, 'htdemucs')
@@ -1565,6 +1651,7 @@ def process_audio_task(task_id, file_path):
         
         # Use the madmom compatibility layer
         from madmom_compat import detect_chords_simple
+        update_task_progress(45, 'Running chord detection algorithm...')
         chords = detect_chords_simple(instrumental_wav_path, task_id)
         
         if not chords or len(chords) == 0:
