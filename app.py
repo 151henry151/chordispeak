@@ -122,7 +122,7 @@ MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB max file size
 
 # Pronunciation strategy configuration
 # Options: 'ipa', 'dots', 'words', 'nato', 'simple', 'spelled', 'compact'
-PRONUNCIATION_STRATEGY = 'compact'  # Use compact strategy for better timing
+PRONUNCIATION_STRATEGY = 'dots'  # Use dots strategy for clearer letter pronunciation
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
@@ -229,7 +229,7 @@ def chord_to_ipa_phonemes(chord):
         }
     elif PRONUNCIATION_STRATEGY == 'compact':
         letter_phonemes = {
-            'A': 'AY', 'B': 'BEE', 'C': 'SEE', 'D': 'DEE', 'E': 'EE', 'F': 'EFF', 'G': 'GEE'
+            'A': 'AAY', 'B': 'BEE', 'C': 'SEE', 'D': 'DEE', 'E': 'EE', 'F': 'EFF', 'G': 'GEE'
         }
         # Use more compact modifiers for better timing
         modifiers = {
@@ -667,26 +667,56 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
                 print(f"[TASK {task_id}] ERROR: {error_msg}")
                 raise RuntimeError(error_msg)
         
-        # Step 6: Creating chord audio track
+        # Step 6: Creating chord audio track with measure-based repetition
         print(f"\n=== [TASK {task_id}] STEP 6: CREATING CHORD AUDIO TRACK ===")
         update_task_progress(85, 'Creating chord audio track')
         
         from pydub import AudioSegment
         chord_audio_segments = []
+        measure_duration = 4.0  # Assume ~4 seconds per measure (typical for most songs)
+        
         for i, chord_data in enumerate(final_chords):
+            # Calculate chord duration
+            if i < len(final_chords) - 1:
+                chord_duration = final_chords[i + 1]['time'] - chord_data['time']
+            else:
+                # For the last chord, estimate duration or use a default
+                chord_duration = 8.0  # Default duration for last chord
+            
+            # Add initial silence before chord announcement
             if i == 0:
                 silence_duration = chord_data['time'] * 1000
             else:
                 silence_duration = (chord_data['time'] - final_chords[i-1]['time']) * 1000
             if silence_duration > 0:
                 chord_audio_segments.append(AudioSegment.silent(duration=int(silence_duration)))
+            
+            # Get the chord speech audio
             chord_speech = chord_data['speech']
             if chord_speech in tts_cache:
                 speech_audio = tts_cache[chord_speech]
-                chord_audio_segments.append(speech_audio)
             else:
-                beep = AudioSegment.sine(frequency=440, duration=200)
-                chord_audio_segments.append(beep)
+                speech_audio = AudioSegment.sine(frequency=440, duration=200)  # Fallback beep
+            
+            # Add the first chord announcement
+            chord_audio_segments.append(speech_audio)
+            
+            # If chord is longer than 1.5 measures, repeat at measure intervals
+            if chord_duration > (measure_duration * 1.5):
+                num_repetitions = int(chord_duration / measure_duration)
+                print(f"[TASK {task_id}] Chord {chord_data['chord']} lasts {chord_duration:.1f}s, adding {num_repetitions-1} repetitions")
+                log_debug(task_id, f"Chord {chord_data['chord']} lasts {chord_duration:.1f}s, adding {num_repetitions-1} repetitions")
+                
+                for rep in range(1, num_repetitions):
+                    # Add silence until next measure
+                    time_to_next_measure = (measure_duration * 1000) - len(speech_audio)
+                    if time_to_next_measure > 0:
+                        chord_audio_segments.append(AudioSegment.silent(duration=int(time_to_next_measure)))
+                    
+                    # Add repeated chord announcement
+                    chord_audio_segments.append(speech_audio)
+                    log_debug(task_id, f"Added repetition {rep} for {chord_data['chord']} at measure {rep+1}")
+        
         chord_track = sum(chord_audio_segments, AudioSegment.empty())
         
         # Step 7: Mixing final audio
@@ -1833,26 +1863,56 @@ def process_audio_task(task_id, file_path):
                 print(f"[TASK {task_id}] ERROR: {error_msg}")
                 raise RuntimeError(error_msg)
         
-        # Step 6: Creating chord audio track
+        # Step 6: Creating chord audio track with measure-based repetition
         print(f"\n=== [TASK {task_id}] STEP 6: CREATING CHORD AUDIO TRACK ===")
         update_task_progress(85, 'Creating chord audio track')
         
         from pydub import AudioSegment
         chord_audio_segments = []
+        measure_duration = 4.0  # Assume ~4 seconds per measure (typical for most songs)
+        
         for i, chord_data in enumerate(final_chords):
+            # Calculate chord duration
+            if i < len(final_chords) - 1:
+                chord_duration = final_chords[i + 1]['time'] - chord_data['time']
+            else:
+                # For the last chord, estimate duration or use a default
+                chord_duration = 8.0  # Default duration for last chord
+            
+            # Add initial silence before chord announcement
             if i == 0:
                 silence_duration = chord_data['time'] * 1000
             else:
                 silence_duration = (chord_data['time'] - final_chords[i-1]['time']) * 1000
             if silence_duration > 0:
                 chord_audio_segments.append(AudioSegment.silent(duration=int(silence_duration)))
+            
+            # Get the chord speech audio
             chord_speech = chord_data['speech']
             if chord_speech in tts_cache:
                 speech_audio = tts_cache[chord_speech]
-                chord_audio_segments.append(speech_audio)
             else:
-                beep = AudioSegment.sine(frequency=440, duration=200)
-                chord_audio_segments.append(beep)
+                speech_audio = AudioSegment.sine(frequency=440, duration=200)  # Fallback beep
+            
+            # Add the first chord announcement
+            chord_audio_segments.append(speech_audio)
+            
+            # If chord is longer than 1.5 measures, repeat at measure intervals
+            if chord_duration > (measure_duration * 1.5):
+                num_repetitions = int(chord_duration / measure_duration)
+                print(f"[TASK {task_id}] Chord {chord_data['chord']} lasts {chord_duration:.1f}s, adding {num_repetitions-1} repetitions")
+                log_debug(task_id, f"Chord {chord_data['chord']} lasts {chord_duration:.1f}s, adding {num_repetitions-1} repetitions")
+                
+                for rep in range(1, num_repetitions):
+                    # Add silence until next measure
+                    time_to_next_measure = (measure_duration * 1000) - len(speech_audio)
+                    if time_to_next_measure > 0:
+                        chord_audio_segments.append(AudioSegment.silent(duration=int(time_to_next_measure)))
+                    
+                    # Add repeated chord announcement
+                    chord_audio_segments.append(speech_audio)
+                    log_debug(task_id, f"Added repetition {rep} for {chord_data['chord']} at measure {rep+1}")
+        
         chord_track = sum(chord_audio_segments, AudioSegment.empty())
         
         # Step 7: Mixing final audio
