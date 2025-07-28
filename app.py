@@ -121,8 +121,8 @@ ALLOWED_EXTENSIONS = {'mp3', 'wav', 'flac', 'm4a'}
 MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB max file size
 
 # Pronunciation strategy configuration
-# Options: 'ipa', 'dots', 'words', 'nato', 'simple', 'spelled', 'compact'
-PRONUNCIATION_STRATEGY = 'ipa'  # Use IPA phonemes for precise pronunciation
+# Options: 'ipa', 'dots', 'words', 'nato', 'simple', 'spelled', 'compact', 'split_dots'
+PRONUNCIATION_STRATEGY = 'split_dots'  # Use split dots strategy for controlled timing
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
@@ -157,7 +157,12 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def chord_to_ipa_phonemes(chord):
-    """Convert chord notation to phonetic spellings for precise pronunciation"""
+    """Convert chord notation to phonetic spellings for precise pronunciation
+    
+    Returns:
+        - For split_dots strategy: list of components to synthesize separately
+        - For other strategies: single string
+    """
     # Strategy 1: IPA Phonemes (most precise)
     letter_phonemes_ipa = {
         'A': 'ˈeɪ',  # IPA for "A"
@@ -213,44 +218,16 @@ def chord_to_ipa_phonemes(chord):
         'G': 'GEE'
     }
     
-    # Choose strategy based on configuration
-    if PRONUNCIATION_STRATEGY == 'ipa':
-        letter_phonemes = letter_phonemes_ipa
-    elif PRONUNCIATION_STRATEGY == 'dots':
-        letter_phonemes = letter_phonemes_dots
-    elif PRONUNCIATION_STRATEGY == 'words':
-        letter_phonemes = letter_phonemes_words
-    elif PRONUNCIATION_STRATEGY == 'nato':
-        letter_phonemes = letter_phonemes_nato
-    elif PRONUNCIATION_STRATEGY == 'spelled':
-        letter_phonemes = {
-            'A': 'A Y', 'B': 'B E E', 'C': 'C E E', 'D': 'D E E', 
-            'E': 'E E', 'F': 'E F F', 'G': 'G E E'
-        }
-    elif PRONUNCIATION_STRATEGY == 'compact':
-        letter_phonemes = {
-            'A': 'letter A', 'B': 'BEE', 'C': 'SEE', 'D': 'letter D', 'E': 'EE', 'F': 'EFF', 'G': 'GEE'
-        }
-        # Use more compact modifiers for better timing
-        modifiers = {
-            '#': 'SHARP',  # sharp
-            'b': 'FLAT',  # flat
-            'm': 'MINOR',  # minor
-            '7': 'SEVENTH',  # seventh
-            'maj7': 'MAJOR SEVENTH',  # major seventh
-            'm7': 'MINOR SEVENTH',  # minor seventh
-            'dim': 'DIMINISHED',  # diminished
-            'aug': 'AUGMENTED',  # augmented
-            'sus': 'SUSPENDED',  # suspended
-            'sus2': 'SUSPENDED TWO',  # suspended two
-            'sus4': 'SUSPENDED FOUR',  # suspended four
-            '6': 'SIXTH',  # sixth
-            'm6': 'MINOR SIXTH',  # minor sixth
-            'add9': 'ADD NINE',  # add nine
-            '5': 'POWER'  # power
-        }
-    else:  # Default to simple
-        letter_phonemes = letter_phonemes_simple
+    # Strategy 6: Split dots (separate synthesis for controlled timing)
+    letter_phonemes_split_dots = {
+        'A': 'A.',
+        'B': 'B.',
+        'C': 'C.',
+        'D': 'D.',
+        'E': 'E.',
+        'F': 'F.',
+        'G': 'G.'
+    }
     
     # Modifier phonemes
     modifiers = {
@@ -270,6 +247,51 @@ def chord_to_ipa_phonemes(chord):
         'add9': 'ADD NINE',  # add nine
         '5': 'POWER'  # power
     }
+    
+    # Choose strategy based on configuration
+    if PRONUNCIATION_STRATEGY == 'ipa':
+        letter_phonemes = letter_phonemes_ipa
+    elif PRONUNCIATION_STRATEGY == 'dots':
+        letter_phonemes = letter_phonemes_dots
+    elif PRONUNCIATION_STRATEGY == 'words':
+        letter_phonemes = letter_phonemes_words
+    elif PRONUNCIATION_STRATEGY == 'nato':
+        letter_phonemes = letter_phonemes_nato
+    elif PRONUNCIATION_STRATEGY == 'spelled':
+        letter_phonemes = {
+            'A': 'A Y', 'B': 'B E E', 'C': 'C E E', 'D': 'D E E', 
+            'E': 'E E', 'F': 'E F F', 'G': 'G E E'
+        }
+    elif PRONUNCIATION_STRATEGY == 'compact':
+        letter_phonemes = {
+            'A': 'AAY', 'B': 'BEE', 'C': 'SEE', 'D': 'DEE', 'E': 'EE', 'F': 'EFF', 'G': 'GEE'
+        }
+        # Use more compact modifiers for better timing
+        modifiers = {
+            '#': 'SHARP',  # sharp
+            'b': 'FLAT',  # flat
+            'm': 'MINOR',  # minor
+            '7': 'SEVENTH',  # seventh
+            'maj7': 'MAJOR SEVENTH',  # major seventh
+            'm7': 'MINOR SEVENTH',  # minor seventh
+            'dim': 'DIMINISHED',  # diminished
+            'aug': 'AUGMENTED',  # augmented
+            'sus': 'SUSPENDED',  # suspended
+            'sus2': 'SUSPENDED TWO',  # suspended two
+            'sus4': 'SUSPENDED FOUR',  # suspended four
+            '6': 'SIXTH',  # sixth
+            'm6': 'MINOR SIXTH',  # minor sixth
+            'add9': 'ADD NINE',  # add nine
+            '5': 'POWER'  # power
+        }
+    elif PRONUNCIATION_STRATEGY == 'split_dots':
+        letter_phonemes = letter_phonemes_split_dots
+        # For split_dots, we return a list of components
+        return parse_chord_for_split_synthesis(chord, letter_phonemes, modifiers)
+    else:  # Default to simple
+        letter_phonemes = letter_phonemes_simple
+    
+    # For non-split strategies, return single string (existing logic)
     
     # Handle single letter chords
     if len(chord) == 1 and chord in letter_phonemes:
@@ -298,6 +320,64 @@ def chord_to_ipa_phonemes(chord):
     
     # Fallback to regular text
     return chord
+
+def parse_chord_for_split_synthesis(chord, letter_phonemes, modifiers):
+    """Parse chord into separate components for split synthesis"""
+    components = []
+    
+    # Find the base note
+    base_note = None
+    remaining = chord
+    
+    # Check for sharps and flats first
+    if '#' in chord:
+        parts = chord.split('#')
+        base_note = parts[0]
+        remaining = '#' + parts[1] if len(parts) > 1 else '#'
+    elif 'b' in chord and len(chord) > 1:
+        parts = chord.split('b')
+        base_note = parts[0]
+        remaining = 'b' + parts[1] if len(parts) > 1 else 'b'
+    else:
+        # No sharp/flat, find longest modifier match
+        for suffix in sorted(modifiers.keys(), key=len, reverse=True):
+            if chord.endswith(suffix):
+                base_note = chord[:-len(suffix)]
+                remaining = suffix
+                break
+        
+        # If no modifier found, it's just a base note
+        if base_note is None:
+            base_note = chord
+            remaining = ''
+    
+    # Add base note component
+    if base_note and base_note in letter_phonemes:
+        components.append(letter_phonemes[base_note])
+    elif base_note:
+        components.append(base_note)  # Fallback
+    
+    # Add modifier components
+    if remaining:
+        if remaining.startswith('#'):
+            components.append(modifiers['#'])
+            remaining = remaining[1:]
+        elif remaining.startswith('b'):
+            components.append(modifiers['b'])
+            remaining = remaining[1:]
+        
+        # Handle additional modifiers
+        if remaining:
+            for suffix in sorted(modifiers.keys(), key=len, reverse=True):
+                if remaining == suffix:
+                    components.append(modifiers[suffix])
+                    break
+            else:
+                # Fallback if modifier not found
+                if remaining:
+                    components.append(remaining)
+    
+    return components
 
 def format_phonemes_for_tts(phoneme_text):
     """Format phonetic text for TTS input using simple spellings"""
@@ -416,18 +496,24 @@ def synthesize_chord_speech_coqui(text, voice_sample_path, output_path):
             print(f"GPU memory after TTS model load: {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
         
         # Convert chord to phonemes
-        phoneme_text = chord_to_ipa_phonemes(text)
-        formatted_phonemes = format_phonemes_for_tts(phoneme_text)
+        phoneme_result = chord_to_ipa_phonemes(text)
         
-        print(f"Using phoneme approach: '{text}' -> '{formatted_phonemes}'")
-        
-        # Generate speech with phonemes
-        tts.tts_to_file(
-            text=formatted_phonemes,
-            speaker_wav=voice_sample_path,
-            language="en",
-            file_path=output_path
-        )
+        # Check if we have split synthesis (list) or regular synthesis (string)
+        if isinstance(phoneme_result, list):
+            # Split synthesis: create separate audio files and combine them
+            return synthesize_split_components(phoneme_result, voice_sample_path, output_path, tts, device)
+        else:
+            # Regular synthesis: single audio file
+            formatted_phonemes = format_phonemes_for_tts(phoneme_result)
+            print(f"Using phoneme approach: '{text}' -> '{formatted_phonemes}'")
+            
+            # Generate speech with phonemes
+            tts.tts_to_file(
+                text=formatted_phonemes,
+                speaker_wav=voice_sample_path,
+                language="en",
+                file_path=output_path
+            )
         
         # GPU memory cleanup after synthesis
         if device == "cuda":
@@ -440,6 +526,69 @@ def synthesize_chord_speech_coqui(text, voice_sample_path, output_path):
     except Exception as e:
         print(f"Coqui TTS synthesis error: {e}")
         return False
+
+def synthesize_split_components(components, voice_sample_path, output_path, tts, device):
+    """Synthesize separate components and combine them with controlled timing"""
+    from pydub import AudioSegment
+    import tempfile
+    import os
+    
+    print(f"Split synthesis for components: {components}")
+    
+    # Create temporary directory for component files
+    temp_dir = tempfile.mkdtemp()
+    component_audios = []
+    
+    try:
+        # Synthesize each component separately
+        for i, component in enumerate(components):
+            component_file = os.path.join(temp_dir, f'component_{i}.wav')
+            formatted_component = format_phonemes_for_tts(component)
+            
+            print(f"Synthesizing component {i+1}/{len(components)}: '{component}' -> '{formatted_component}'")
+            
+            # Generate speech for this component
+            tts.tts_to_file(
+                text=formatted_component,
+                speaker_wav=voice_sample_path,
+                language="en",
+                file_path=component_file
+            )
+            
+            # Load the generated audio
+            if os.path.exists(component_file):
+                component_audio = AudioSegment.from_wav(component_file)
+                component_audios.append(component_audio)
+            else:
+                print(f"Warning: Component file not created: {component_file}")
+                # Create a short silence as fallback
+                component_audios.append(AudioSegment.silent(duration=200))
+        
+        # Combine components with controlled timing
+        if component_audios:
+            # Add small gaps between components (150ms) for natural spacing
+            gap_duration = 150  # milliseconds
+            combined_audio = component_audios[0]
+            
+            for component_audio in component_audios[1:]:
+                combined_audio += AudioSegment.silent(duration=gap_duration)
+                combined_audio += component_audio
+            
+            # Export the combined audio
+            combined_audio.export(output_path, format='wav')
+            print(f"Split synthesis complete: {len(components)} components combined")
+            return True
+        else:
+            print("Error: No component audios were generated")
+            return False
+            
+    finally:
+        # Clean up temporary files
+        import shutil
+        try:
+            shutil.rmtree(temp_dir)
+        except:
+            pass  # Ignore cleanup errors
 
 def synthesize_chord_speech(text, voice_sample_path, output_path):
     """Generate speech using only Coqui XTTS v2 voice cloning"""
@@ -636,13 +785,24 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
         print(f"\n=== [TASK {task_id}] STEP 5: VOICE SYNTHESIS ===")
         update_task_progress(70, 'Synthesizing spoken chord overlay')
         
-        unique_chords = list(set(chord_data['speech'] for chord_data in final_chords))
+        # Handle both string and list speech formats for unique chord collection
+        unique_speech_keys = set()
+        for chord_data in final_chords:
+            speech = chord_data['speech']
+            if isinstance(speech, list):
+                # Convert list to string for uniqueness check
+                speech_key = '|'.join(speech)
+            else:
+                speech_key = speech
+            unique_speech_keys.add(speech_key)
+        
+        unique_chords = list(unique_speech_keys)
         print(f"[TASK {task_id}] Unique chords to synthesize: {len(unique_chords)}")
         
         tts_cache = {}
         
         # Update progress for each chord synthesis
-        for i, chord_speech in enumerate(unique_chords):
+        for i, chord_speech_key in enumerate(unique_chords):
             # Update progress for each chord (70-85%)
             if len(unique_chords) == 1:
                 chord_progress = 70
@@ -653,15 +813,25 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
             
             update_task_progress(chord_progress, f'Synthesizing chord {i+1}/{len(unique_chords)}')
             
-            tts_output_path = os.path.join(task_dir, f'tts_{chord_speech.replace(" ", "_").replace("#", "sharp")}.wav')
+            # Convert speech key back to original format for synthesis
+            if '|' in chord_speech_key:
+                # Split synthesis - convert back to list
+                chord_speech = chord_speech_key.split('|')
+                safe_filename = chord_speech_key.replace("|", "_").replace(" ", "_").replace("#", "sharp")
+            else:
+                # Regular synthesis - use as string
+                chord_speech = chord_speech_key
+                safe_filename = chord_speech.replace(" ", "_").replace("#", "sharp")
+            
+            tts_output_path = os.path.join(task_dir, f'tts_{safe_filename}.wav')
             if not synthesize_chord_speech(chord_speech, voice_sample_path, tts_output_path):
                 error_msg = f"TTS synthesis failed for chord: {chord_speech}"
                 print(f"[TASK {task_id}] ERROR: {error_msg}")
                 raise RuntimeError(error_msg)
             if os.path.exists(tts_output_path):
                 from pydub import AudioSegment
-                tts_cache[chord_speech] = AudioSegment.from_wav(tts_output_path)
-                print(f"[TASK {task_id}] Loaded TTS for '{chord_speech}': {len(tts_cache[chord_speech])}ms duration")
+                tts_cache[chord_speech_key] = AudioSegment.from_wav(tts_output_path)
+                print(f"[TASK {task_id}] Loaded TTS for '{chord_speech}': {len(tts_cache[chord_speech_key])}ms duration")
             else:
                 error_msg = f"TTS output file not created for chord: {chord_speech}"
                 print(f"[TASK {task_id}] ERROR: {error_msg}")
@@ -693,8 +863,14 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
             
             # Get the chord speech audio
             chord_speech = chord_data['speech']
-            if chord_speech in tts_cache:
-                speech_audio = tts_cache[chord_speech]
+            # Convert speech to cache key format
+            if isinstance(chord_speech, list):
+                speech_cache_key = '|'.join(chord_speech)
+            else:
+                speech_cache_key = chord_speech
+            
+            if speech_cache_key in tts_cache:
+                speech_audio = tts_cache[speech_cache_key]
             else:
                 speech_audio = AudioSegment.sine(frequency=440, duration=200)  # Fallback beep
             
@@ -1832,13 +2008,24 @@ def process_audio_task(task_id, file_path):
         print(f"\n=== [TASK {task_id}] STEP 5: VOICE SYNTHESIS ===")
         update_task_progress(70, 'Synthesizing spoken chord overlay')
         
-        unique_chords = list(set(chord_data['speech'] for chord_data in final_chords))
+        # Handle both string and list speech formats for unique chord collection
+        unique_speech_keys = set()
+        for chord_data in final_chords:
+            speech = chord_data['speech']
+            if isinstance(speech, list):
+                # Convert list to string for uniqueness check
+                speech_key = '|'.join(speech)
+            else:
+                speech_key = speech
+            unique_speech_keys.add(speech_key)
+        
+        unique_chords = list(unique_speech_keys)
         print(f"[TASK {task_id}] Unique chords to synthesize: {len(unique_chords)}")
         
         tts_cache = {}
         
         # Update progress for each chord synthesis
-        for i, chord_speech in enumerate(unique_chords):
+        for i, chord_speech_key in enumerate(unique_chords):
             # Update progress for each chord (70-85%)
             if len(unique_chords) == 1:
                 chord_progress = 70
@@ -1849,15 +2036,25 @@ def process_audio_task(task_id, file_path):
             
             update_task_progress(chord_progress, f'Synthesizing chord {i+1}/{len(unique_chords)}')
             
-            tts_output_path = os.path.join(task_dir, f'tts_{chord_speech.replace(" ", "_").replace("#", "sharp")}.wav')
+            # Convert speech key back to original format for synthesis
+            if '|' in chord_speech_key:
+                # Split synthesis - convert back to list
+                chord_speech = chord_speech_key.split('|')
+                safe_filename = chord_speech_key.replace("|", "_").replace(" ", "_").replace("#", "sharp")
+            else:
+                # Regular synthesis - use as string
+                chord_speech = chord_speech_key
+                safe_filename = chord_speech.replace(" ", "_").replace("#", "sharp")
+            
+            tts_output_path = os.path.join(task_dir, f'tts_{safe_filename}.wav')
             if not synthesize_chord_speech(chord_speech, voice_sample_path, tts_output_path):
                 error_msg = f"TTS synthesis failed for chord: {chord_speech}"
                 print(f"[TASK {task_id}] ERROR: {error_msg}")
                 raise RuntimeError(error_msg)
             if os.path.exists(tts_output_path):
                 from pydub import AudioSegment
-                tts_cache[chord_speech] = AudioSegment.from_wav(tts_output_path)
-                print(f"[TASK {task_id}] Loaded TTS for '{chord_speech}': {len(tts_cache[chord_speech])}ms duration")
+                tts_cache[chord_speech_key] = AudioSegment.from_wav(tts_output_path)
+                print(f"[TASK {task_id}] Loaded TTS for '{chord_speech}': {len(tts_cache[chord_speech_key])}ms duration")
             else:
                 error_msg = f"TTS output file not created for chord: {chord_speech}"
                 print(f"[TASK {task_id}] ERROR: {error_msg}")
