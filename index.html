@@ -1211,6 +1211,7 @@
         let currentTaskId = null;
         let isProcessing = false;
         let currentProgress = 0; // Track current progress to prevent backwards movement
+        let lastDisplayedMessage = ''; // Track last displayed message to prevent duplicates
 
         // DOM elements
         const fileInput = document.getElementById('fileInput');
@@ -1388,6 +1389,7 @@
             progressModal.classList.add('show');
             resultsContainer.style.display = 'none';
             currentProgress = 0; // Reset progress tracking for new process
+            lastDisplayedMessage = ''; // Reset duplicate tracking for new process
             updateProgress(0, 'Initializing...', 'Starting');
             // Hide close modal button for new processes
             closeModalBtn.style.display = 'none';
@@ -1415,6 +1417,12 @@
         }
 
         function addTaskLog(message) {
+            // Check for duplicate messages
+            if (message === lastDisplayedMessage) {
+                console.log('Skipping duplicate message:', message);
+                return;
+            }
+            
             // Clear previous logs to show only one message at a time
             taskLogDisplay.innerHTML = '';
             const logLine = document.createElement('div');
@@ -1439,6 +1447,9 @@
             });
             
             console.log('Processed message:', processedMessage);
+            
+            // Update last displayed message
+            lastDisplayedMessage = message;
             
             // Don't add another [TASK] prefix since the message already has it
             logLine.textContent = processedMessage;
