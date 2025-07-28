@@ -1455,12 +1455,7 @@
             logLine.textContent = processedMessage;
             taskLogDisplay.appendChild(logLine);
             
-            // Remove the element after animation completes
-            setTimeout(() => {
-                if (logLine.parentNode) {
-                    logLine.parentNode.removeChild(logLine);
-                }
-            }, 3000); // Match the animation duration
+            // Don't auto-clear - let it stay until the next message appears
         }
 
         async function fetchTaskLogs(taskId) {
