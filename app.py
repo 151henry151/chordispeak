@@ -604,8 +604,15 @@ def synthesize_chord_speech_coqui(text, voice_sample_path, output_path):
         if device == "cuda":
             print(f"GPU memory after TTS model load: {torch.cuda.memory_allocated() / 1024**3:.2f} GB")
         
-        # Convert chord to phonemes
-        phoneme_result = chord_to_ipa_phonemes(text)
+        # Handle input that's already split phonemes vs chord name
+        if isinstance(text, list):
+            # Input is already split phonemes (e.g., ['E.', 'MINOR'])
+            phoneme_result = text
+            print(f"Using pre-split phonemes: {phoneme_result}")
+        else:
+            # Input is chord name, convert to phonemes
+            phoneme_result = chord_to_ipa_phonemes(text)
+            print(f"Converted chord '{text}' to phonemes: {phoneme_result}")
         
         # Check if we have split synthesis (list) or regular synthesis (string)
         if isinstance(phoneme_result, list):
@@ -614,7 +621,7 @@ def synthesize_chord_speech_coqui(text, voice_sample_path, output_path):
         else:
             # Regular synthesis: single audio file
             formatted_phonemes = format_phonemes_for_tts(phoneme_result)
-            print(f"Using phoneme approach: '{text}' -> '{formatted_phonemes}'")
+            print(f"Using single phoneme approach: '{formatted_phonemes}'")
             
             # Generate speech with phonemes
             tts.tts_to_file(
@@ -924,21 +931,8 @@ def detect_chords(audio_file, chord_types=None, task_id=None):
             
             # Convert speech key back to original format for synthesis
             if '|' in chord_speech_key:
-                # Split synthesis - find original chord name instead of using split components
-                # Find the chord that matches this speech pattern
-                original_chord = None
-                for chord_data in final_chords:
-                    if isinstance(chord_data['speech'], list):
-                        if '|'.join(chord_data['speech']) == chord_speech_key:
-                            original_chord = chord_data['chord']
-                            break
-                
-                if original_chord:
-                    chord_speech = original_chord  # Use original chord name like 'Em'
-                else:
-                    # Fallback: reconstruct from cache key (less reliable)
-                    chord_speech = chord_speech_key.replace('|', '')  # 'E.MINOR' -> 'E.MINOR'
-                
+                # Split synthesis - convert back to list for separate component synthesis
+                chord_speech = chord_speech_key.split('|')
                 safe_filename = chord_speech_key.replace("|", "_").replace(" ", "_").replace("#", "sharp")
             else:
                 # Regular synthesis - use as string
