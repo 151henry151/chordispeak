@@ -1501,6 +1501,8 @@
                     
                     // Debug: log the status data
                     console.log('Status update:', status);
+                    console.log('Backend progress:', status.progress);
+                    console.log('Backend step:', status.step);
                     
                     // Fetch and update task logs
                     const taskLogs = await fetchTaskLogs(currentTaskId);

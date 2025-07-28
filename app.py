@@ -1697,10 +1697,8 @@ def get_task_logs(task_id):
         return jsonify({'error': 'Task not found'}), 404
     
     logs = task_logs.get(task_id, [])
-    return jsonify({
-        'task_id': task_id,
-        'logs': logs
-    })
+    # Return as plain text for frontend compatibility
+    return '\n'.join(logs), 200, {'Content-Type': 'text/plain'}
 
 @app.route('/gpu-info')
 def get_gpu_info():
