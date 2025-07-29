@@ -2220,8 +2220,17 @@ def process_audio_task(task_id, file_path):
             
             # Get the chord speech audio
             chord_speech = chord_data['speech']
-            if chord_speech in tts_cache:
-                speech_audio = tts_cache[chord_speech]
+            
+            # Convert chord_speech to cache key format for lookup
+            if isinstance(chord_speech, list):
+                # Split synthesis: ['C.', 'SHARP'] -> 'C.|SHARP'
+                cache_key = '|'.join(chord_speech)
+            else:
+                # Regular synthesis: use string directly
+                cache_key = chord_speech
+            
+            if cache_key in tts_cache:
+                speech_audio = tts_cache[cache_key]
             else:
                 speech_audio = AudioSegment.sine(frequency=440, duration=200)  # Fallback beep
             
